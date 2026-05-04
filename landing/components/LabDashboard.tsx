@@ -142,7 +142,7 @@ export default function LabDashboard() {
           <div className="flex items-center gap-2 mb-3">
             <Clock className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500" />
             <span className="text-[11px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500">
-              Pick up where you left off
+              Recent tools
             </span>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
@@ -201,7 +201,7 @@ export default function LabDashboard() {
               </span>
             </div>
             <p className="text-[12px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Drag a file onto the panel above, or click to browse.
+              Drag a file onto the panel above, or click to browse local files.
             </p>
           </div>
 
@@ -217,7 +217,7 @@ export default function LabDashboard() {
               </span>
             </div>
             <p className="text-[12px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Press {isMac ? "⌘K" : "Ctrl K"} to jump to any tool by name.
+              Press {isMac ? "⌘K" : "Ctrl K"} to jump to any of 22 tools by name.
             </p>
           </button>
 

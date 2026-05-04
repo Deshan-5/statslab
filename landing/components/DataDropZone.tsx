@@ -4,8 +4,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Upload, FileSpreadsheet, X, Lightbulb, ArrowRight, Loader2,
-  ChevronDown, ChevronUp, AlertCircle, CheckCircle2,
+  Upload, Database, X, ArrowRight, Loader2,
+  AlertCircle, CheckCircle2,
+  BarChart3, TrendingUp, Activity, Grid3x3, Clock,
 } from "lucide-react";
 import {
   mean, median, sd, skewness, kurtosis,
@@ -32,12 +33,14 @@ type ColumnStats = {
 
 type AnalysisResult = {
   columns: ColumnStats[];
-  textColumns: string[];  // non-numeric column names
+  textColumns: string[];                                  // non-numeric column names
+  categoricalGroupCounts: Map<string, number>;            // unique group counts per categorical column
   correlations?: { col1: string; col2: string; r: number }[];
   rowCount: number;
   colCount: number;
   headers: string[];
   sampleRows: string[][];
+  numericColumnsByName: string[];                         // numeric column names in order
 };
 
 type AISummary = {
@@ -45,10 +48,17 @@ type AISummary = {
   suggestions: { toolId: string; reason: string }[];
 };
 
+type SuggestionIcon =
+  | typeof BarChart3
+  | typeof TrendingUp
+  | typeof Activity
+  | typeof Grid3x3
+  | typeof Clock;
+
 type Suggestion = {
-  emoji: string;
+  Icon: SuggestionIcon;
   title: string;
-  why: string;
+  subtitle: string;
   buttons: { toolId: string; label: string }[];
 };
 
@@ -63,7 +73,6 @@ export default function DataDropZone() {
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(true);
   const [showDetailed, setShowDetailed] = useState(false);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const rawTextRef = useRef<string>("");
@@ -74,7 +83,6 @@ export default function DataDropZone() {
     setAiSummary(null);
     setAiError(null);
     setFileName(name ?? null);
-    setExpanded(true);
     setShowDetailed(false);
     setWorkspaceLoaded(false);
     rawTextRef.current = text;
@@ -133,10 +141,12 @@ export default function DataDropZone() {
     return {
       columns: [col],
       textColumns: [],
+      categoricalGroupCounts: new Map(),
       rowCount: nums.length,
       colCount: 1,
       headers: ["Values"],
       sampleRows: nums.slice(0, 5).map((n) => [String(n)]),
+      numericColumnsByName: ["Values"],
     };
   }
 
@@ -163,6 +173,19 @@ export default function DataDropZone() {
       });
     }
 
+    // Group counts for each non-numeric column (used for suggestion text + table badges).
+    const categoricalGroupCounts = new Map<string, number>();
+    for (const colName of textColumns) {
+      const colIdx = csv.headers.indexOf(colName);
+      if (colIdx < 0) continue;
+      const seen = new Set<string>();
+      for (const row of csv.rows) {
+        const v = row[colIdx];
+        if (v !== null && v !== undefined && v !== "") seen.add(String(v));
+      }
+      categoricalGroupCounts.set(colName, seen.size);
+    }
+
     const correlations: { col1: string; col2: string; r: number }[] = [];
     if (numCols.length >= 2 && numCols.length <= 10) {
       for (let i = 0; i < numCols.length; i++) {
@@ -181,11 +204,13 @@ export default function DataDropZone() {
     return {
       columns,
       textColumns,
+      categoricalGroupCounts,
       correlations: correlations.length > 0 ? correlations : undefined,
       rowCount: csv.rowCount,
       colCount: csv.colCount,
       headers: csv.headers,
       sampleRows: csv.rows.slice(0, 5),
+      numericColumnsByName: numCols.map(([n]) => n),
     };
   }
 
@@ -225,7 +250,7 @@ export default function DataDropZone() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
       setAiSummary({
-        summary: data.summary || "Analysis complete.",
+        summary: stripEmoji(data.summary || "Analysis complete."),
         suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
       });
     } catch (e) {
@@ -278,13 +303,12 @@ export default function DataDropZone() {
     setFileName(null);
     setShowPaste(false);
     setPasteText("");
-    setExpanded(true);
     setShowDetailed(false);
     setWorkspaceLoaded(false);
     clearDataset();
   };
 
-  /* ── Smart suggestions (rule-based) ───────────────────────────────── */
+  /* ── Rule-based suggestions ───────────────────────────────────────── */
   const suggestions = useMemo<Suggestion[]>(
     () => analysis ? buildSuggestions(analysis) : [],
     [analysis],
@@ -312,11 +336,11 @@ export default function DataDropZone() {
                 ? "bg-orange-100 dark:bg-orange-900/30 text-orange-500"
                 : "bg-neutral-100 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-500 group-hover:text-neutral-600 dark:group-hover:text-neutral-300"
             }`}>
-              <Upload className="w-4.5 h-4.5" />
+              <Database className="w-4 h-4" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Drop a dataset for instant analysis</div>
-              <div className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">CSV, TSV, or raw numbers · Instant table + smart suggestions</div>
+              <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300">Drop a dataset to analyze</div>
+              <div className="text-xs text-neutral-400 dark:text-neutral-500 mt-0.5">CSV, TSV, or raw numbers. Parsed locally in the browser.</div>
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); setShowPaste(true); }}
@@ -339,7 +363,7 @@ export default function DataDropZone() {
                 <textarea
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
-                  placeholder={"Paste your data here…\n\nExamples:\n• Numbers: 12, 15, 18, 22, 25\n• CSV: name,score\\nAlice,85\\nBob,92"}
+                  placeholder={"Paste CSV, TSV, or numbers.\n\nExamples:\n  12, 15, 18, 22, 25\n  name,score\n  Alice,85\n  Bob,92"}
                   rows={5}
                   className="w-full rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 px-3 py-2 text-sm font-mono text-neutral-800 dark:text-neutral-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-neutral-400 dark:focus:border-neutral-600 resize-y"
                 />
@@ -349,7 +373,7 @@ export default function DataDropZone() {
                     disabled={!pasteText.trim()}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-30 transition-opacity"
                   >
-                    <Lightbulb className="w-3.5 h-3.5" /> Analyze
+                    <Upload className="w-3.5 h-3.5" /> Analyze
                   </button>
                   <button
                     onClick={() => { setShowPaste(false); setPasteText(""); }}
@@ -373,154 +397,163 @@ export default function DataDropZone() {
     );
   }
 
-  /* ── Analysis results ─────────────────────────────────────────────── */
+  /* ── Post-drop layout ─────────────────────────────────────────────── */
+  const totalCols = analysis.columns.length + analysis.textColumns.length;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 overflow-hidden"
+      className="space-y-5"
     >
-      {/* Header bar */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-neutral-100 dark:border-neutral-800/60 bg-neutral-50/50 dark:bg-neutral-800/20">
+      {/* ── 1. Header row ────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <FileSpreadsheet className="w-4 h-4 text-neutral-400 dark:text-neutral-500 shrink-0" />
-          <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200 truncate">{fileName || dataset?.name || "Dataset"}</span>
-          <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-mono shrink-0">{analysis.rowCount} × {analysis.colCount}</span>
+          <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 shrink-0">
+            <Database className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
+              {fileName || dataset?.name || "Dataset"}
+            </div>
+            <div className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400 mt-0.5">
+              {analysis.rowCount.toLocaleString()} rows × {analysis.colCount} cols
+            </div>
+          </div>
           {workspaceLoaded && (
-            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            <span className="hidden md:inline-flex items-center gap-1 ml-2 text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
               <CheckCircle2 className="w-3 h-3" />
-              Data loaded — tools will use this dataset
+              Loaded into workspace
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => setExpanded((v) => !v)} className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label={expanded ? "Collapse" : "Expand"}>
-            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
-          <button onClick={reset} className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="Close analysis">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <button
+          onClick={reset}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 hover:border-neutral-300 dark:hover:border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 transition-all"
+          aria-label="Reset dataset"
+        >
+          <X className="w-3.5 h-3.5" />
+          Reset
+        </button>
       </div>
 
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0 }}
-            animate={{ height: "auto" }}
-            exit={{ height: 0 }}
-            className="overflow-hidden"
+      {/* ── 2. Data table ─────────────────────────────────────────────── */}
+      {dataset && <DataTable dataset={dataset} />}
+
+      {/* ── 3. Suggested analyses (rule-based) ───────────────────────── */}
+      {suggestions.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400 font-medium mb-2.5">
+            Suggested analyses
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {suggestions.map((s, i) => <SuggestionCard key={i} s={s} />)}
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. Detailed column statistics (collapsible) ──────────────── */}
+      {totalCols > 0 && (
+        <div>
+          <button
+            onClick={() => setShowDetailed((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors"
           >
-            <div className="p-4 space-y-5">
-              {/* ── Section 1: Data table (first 100 rows × all columns) ── */}
-              {dataset && <DataTable dataset={dataset} />}
-
-              {/* ── Section 2: Smart Analyze (rule-based) ── */}
-              {suggestions.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400 font-medium">Smart Analyze</span>
-                    <span className="text-[10px] text-neutral-400 dark:text-neutral-500">· {suggestions.length} suggestion{suggestions.length === 1 ? "" : "s"}</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                    {suggestions.map((s, i) => <SuggestionCard key={i} s={s} />)}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Section 3: Detailed column statistics (collapsible) ── */}
-              {(analysis.columns.length > 0 || analysis.textColumns.length > 0) && (
-                <div>
-                  <button
-                    onClick={() => setShowDetailed((v) => !v)}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 transition-colors"
-                  >
-                    <span className={`transition-transform ${showDetailed ? "rotate-90" : ""}`}>▸</span>
-                    Detailed column statistics ({analysis.columns.length + analysis.textColumns.length} columns)
-                  </button>
-                  <AnimatePresence>
-                    {showDetailed && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                        <div className="pt-3 space-y-4">
-                          {analysis.columns.length > 0 && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                              {analysis.columns.map((col) => <ColumnCard key={col.name} col={col} />)}
-                            </div>
-                          )}
-                          {analysis.textColumns.length > 0 && (
-                            <div>
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 dark:text-neutral-500 mb-2">Categorical columns</div>
-                              <div className="flex flex-wrap gap-1.5">
-                                {analysis.textColumns.map((name) => (
-                                  <span key={name} className="inline-flex items-center rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/30 px-2 py-1 text-[10px] text-neutral-600 dark:text-neutral-400">{name}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {analysis.correlations && analysis.correlations.length > 0 && (
-                            <div>
-                              <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 dark:text-neutral-500 mb-2">Notable correlations</div>
-                              <div className="flex flex-wrap gap-2">
-                                {analysis.correlations
-                                  .filter((c) => Math.abs(c.r) > 0.3)
-                                  .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
-                                  .slice(0, 6)
-                                  .map((c) => <CorrelationPill key={`${c.col1}-${c.col2}`} corr={c} />)}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              )}
-
-              {/* ── Section 4: Insights (AI summary, secondary) ── */}
-              <div className="border-t border-neutral-100 dark:border-neutral-800/60 pt-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Lightbulb className="w-3 h-3 text-orange-400" />
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 dark:text-neutral-500">Insights</span>
-                </div>
-                {aiLoading && (
-                  <div className="flex items-center gap-2 text-xs text-neutral-400 dark:text-neutral-500 py-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Crunching numbers…
-                  </div>
-                )}
-                {aiError && (
-                  <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 px-3 py-2 text-xs text-red-700 dark:text-red-300">
-                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />{aiError}
-                  </div>
-                )}
-                {aiSummary && (
-                  <div className="space-y-3">
-                    <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">{aiSummary.summary}</p>
-                    {aiSummary.suggestions.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {aiSummary.suggestions.map((s) => {
-                          const tool = findTool(s.toolId);
-                          if (!tool) return null;
-                          return (
-                            <Link key={s.toolId} href={`/app?tool=${s.toolId}`} title={s.reason} className="group inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-white dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-600 px-2.5 py-1.5 transition-all">
-                              <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">{tool.name}</span>
-                              <ArrowRight className="w-3 h-3 text-neutral-300 dark:text-neutral-600 group-hover:text-orange-400 transition-colors" />
-                            </Link>
-                          );
-                        })}
+            <span className={`transition-transform inline-block ${showDetailed ? "rotate-90" : ""}`}>›</span>
+            Detailed column statistics ({totalCols} columns)
+          </button>
+          <AnimatePresence>
+            {showDetailed && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-3 space-y-4">
+                  {analysis.columns.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {analysis.columns.map((col) => <ColumnCard key={col.name} col={col} />)}
+                    </div>
+                  )}
+                  {analysis.textColumns.length > 0 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 dark:text-neutral-500 mb-2">Categorical columns</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {analysis.textColumns.map((name) => (
+                          <span key={name} className="inline-flex items-center rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/30 px-2 py-1 text-[10px] text-neutral-600 dark:text-neutral-400">{name}</span>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                  {analysis.correlations && analysis.correlations.length > 0 && (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 dark:text-neutral-500 mb-2">Notable correlations</div>
+                      <div className="flex flex-wrap gap-2">
+                        {analysis.correlations
+                          .filter((c) => Math.abs(c.r) > 0.3)
+                          .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
+                          .slice(0, 6)
+                          .map((c) => <CorrelationPill key={`${c.col1}-${c.col2}`} corr={c} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* ── 5. Insights (model-generated summary, last) ──────────────── */}
+      {(aiLoading || aiError || aiSummary) && (
+        <div className="border-t border-neutral-100 dark:border-neutral-800/60 pt-4">
+          <div className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 dark:text-neutral-500 mb-2">
+            Insights
+          </div>
+          {aiLoading && (
+            <div className="flex items-center gap-2 text-xs text-neutral-400 dark:text-neutral-500 py-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Generating summary
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+          {aiError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />{aiError}
+            </div>
+          )}
+          {aiSummary && (
+            <div className="space-y-3">
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                {stripEmoji(aiSummary.summary)}
+              </p>
+              {aiSummary.suggestions.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {aiSummary.suggestions.map((s) => {
+                    const tool = findTool(s.toolId);
+                    if (!tool) return null;
+                    return (
+                      <Link
+                        key={s.toolId}
+                        href={`/app?tool=${s.toolId}`}
+                        title={stripEmoji(s.reason)}
+                        className="group inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-white dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-600 px-2.5 py-1.5 transition-all"
+                      >
+                        <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">{tool.name}</span>
+                        <ArrowRight className="w-3 h-3 text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-600 dark:group-hover:text-neutral-300 transition-colors" />
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }
 
-/* ── Section 1: Data table ──────────────────────────────────────────── */
+/* ── Data table ─────────────────────────────────────────────────────── */
 
 const MAX_TABLE_ROWS = 100;
 
@@ -544,10 +577,6 @@ function DataTable({ dataset }: { dataset: Dataset }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-500 dark:text-neutral-400 font-medium">Data</span>
-        <span className="text-[10px] text-neutral-400 dark:text-neutral-500 font-mono">{total.toLocaleString()} rows · {cols.length} cols</span>
-      </div>
       <div className="max-h-[420px] overflow-y-auto overflow-x-auto rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/40">
         <table className="w-full font-mono text-xs border-collapse">
           <thead className="sticky top-0 z-10">
@@ -581,7 +610,7 @@ function DataTable({ dataset }: { dataset: Dataset }) {
           </tbody>
         </table>
       </div>
-      <div className="mt-1.5 text-[10px] text-neutral-400 dark:text-neutral-500 font-mono">
+      <div className="mt-1.5 text-[10px] text-neutral-500 dark:text-neutral-400 font-mono">
         Showing {shown} of {total.toLocaleString()} rows
       </div>
     </div>
@@ -606,24 +635,39 @@ function formatCell(n: number): string {
   return n.toFixed(3);
 }
 
-/* ── Section 2: Smart suggestions ───────────────────────────────────── */
+/* ── Rule-based suggestions ─────────────────────────────────────────── */
 
 function buildSuggestions(a: AnalysisResult): Suggestion[] {
   const out: Suggestion[] = [];
   const nNum = a.columns.length;
   const nCat = a.textColumns.length;
 
-  // Rule 1: two numerics with |r| ≥ 0.5
+  // Rule: 1+ numeric × 1+ categorical → group comparison
+  if (nNum >= 1 && nCat >= 1) {
+    const numCol = a.columns[0]?.name ?? "value";
+    const catCol = a.textColumns[0] ?? "group";
+    const k = a.categoricalGroupCounts.get(catCol) ?? 0;
+    out.push({
+      Icon: BarChart3,
+      title: `Compare ${numCol} across ${catCol}${k ? ` (${k} groups)` : ""}.`,
+      subtitle: "Numeric vs categorical comparison.",
+      buttons: [
+        { toolId: "bar-chart", label: "Bar Chart" },
+        { toolId: "hypothesis-test", label: "Hypothesis Test" },
+      ],
+    });
+  }
+
+  // Rule: 2 numerics with |r| ≥ 0.5 → linear relationship
   const topCorr = a.correlations
     ?.filter((c) => Math.abs(c.r) >= 0.5)
     .sort((x, y) => Math.abs(y.r) - Math.abs(x.r))[0];
   if (topCorr) {
     const sign = topCorr.r >= 0 ? "+" : "−";
-    const strength = Math.abs(topCorr.r) > 0.7 ? "strong" : "moderate";
     out.push({
-      emoji: "📈",
-      title: `${topCorr.col1} vs ${topCorr.col2} look related (r = ${sign}${Math.abs(topCorr.r).toFixed(2)})`,
-      why: `Pearson correlation is ${strength}, so a linear model or scatter plot will surface the relationship clearly.`,
+      Icon: TrendingUp,
+      title: `${topCorr.col1} vs ${topCorr.col2}, r = ${sign}${Math.abs(topCorr.r).toFixed(2)}.`,
+      subtitle: "Linear relationship.",
       buttons: [
         { toolId: "linear-regression", label: "Linear Regression" },
         { toolId: "scatter", label: "Scatter" },
@@ -631,26 +675,13 @@ function buildSuggestions(a: AnalysisResult): Suggestion[] {
     });
   }
 
-  // Rule 2: one numeric + one categorical
-  if (nNum >= 1 && nCat >= 1) {
-    out.push({
-      emoji: "📊",
-      title: `Compare ${a.columns[0]?.name ?? "value"} across ${a.textColumns[0] ?? "group"} groups`,
-      why: "You have a numeric measure and a categorical splitter — perfect for group comparisons and mean-difference tests.",
-      buttons: [
-        { toolId: "bar-chart", label: "Bar Chart" },
-        { toolId: "hypothesis-test", label: "Hypothesis Testing" },
-      ],
-    });
-  }
-
-  // Rule 3: a skewed numeric column (|skew| > 1)
+  // Rule: a column with |skewness| > 1 → non-Normal distribution
   const skewed = a.columns.find((c) => Math.abs(c.skewness) > 1);
   if (skewed) {
     out.push({
-      emoji: "🔔",
-      title: `${skewed.name} is ${skewed.skewness > 0 ? "right" : "left"}-skewed`,
-      why: `Skewness ≈ ${skewed.skewness.toFixed(2)} — check normality with a Q-Q plot or compare against known distributions before applying parametric tests.`,
+      Icon: Activity,
+      title: `${skewed.name} distribution, skewness = ${skewed.skewness.toFixed(2)}.`,
+      subtitle: "Non-Normal.",
       buttons: [
         { toolId: "qq-plot", label: "Q-Q Plot" },
         { toolId: "distribution-explorer", label: "Distribution Explorer" },
@@ -658,12 +689,12 @@ function buildSuggestions(a: AnalysisResult): Suggestion[] {
     });
   }
 
-  // Rule 4: 3+ numeric → correlation overview
+  // Rule: 3+ numerics → correlation overview
   if (nNum >= 3) {
     out.push({
-      emoji: "🗺️",
-      title: `Correlation overview across ${nNum} columns`,
-      why: "With several numeric features, a heatmap or PCA biplot reveals which variables move together and which add fresh information.",
+      Icon: Grid3x3,
+      title: `Correlation across ${nNum} numeric columns.`,
+      subtitle: "Multivariate structure.",
       buttons: [
         { toolId: "heatmap", label: "Heatmap" },
         { toolId: "pca", label: "PCA / Biplot" },
@@ -671,41 +702,15 @@ function buildSuggestions(a: AnalysisResult): Suggestion[] {
     });
   }
 
-  // Rule 5: sequential first column → time series
+  // Rule: first column sequential → time index
   if (isSequentialColumn(a)) {
     out.push({
-      emoji: "📅",
-      title: "Looks like a time series",
-      why: "Your first column looks like an ordered index or evenly-spaced timestamps. Time-series tools will respect ordering and show trends, autocorrelation, and seasonality.",
+      Icon: Clock,
+      title: "First column appears to be a time index.",
+      subtitle: "Ordered or evenly-spaced values.",
       buttons: [
         { toolId: "time-series", label: "Time Series" },
         { toolId: "line-chart", label: "Line Chart" },
-      ],
-    });
-  }
-
-  // Rule 6: 2+ categorical
-  if (nCat >= 2) {
-    out.push({
-      emoji: "🔢",
-      title: "Cross-tabulation possible",
-      why: "Two or more categorical columns let you build a contingency table and test whether the categories are independent.",
-      buttons: [
-        { toolId: "heatmap", label: "Heatmap" },
-        { toolId: "hypothesis-test", label: "Hypothesis Testing" },
-      ],
-    });
-  }
-
-  // Rule 7: single numeric → distribution analysis
-  if (nNum === 1 && nCat === 0) {
-    out.push({
-      emoji: "📐",
-      title: `Distribution analysis for ${a.columns[0]?.name ?? "Values"}`,
-      why: "One numeric column is ideal for fitting a distribution, estimating mean/SD, and bootstrapping confidence intervals.",
-      buttons: [
-        { toolId: "normal-distribution", label: "Normal Distribution" },
-        { toolId: "bootstrap-sampling", label: "Bootstrap" },
       ],
     });
   }
@@ -717,22 +722,17 @@ function buildSuggestions(a: AnalysisResult): Suggestion[] {
 function isSequentialColumn(a: AnalysisResult): boolean {
   if (a.headers.length === 0 || a.sampleRows.length < 3) return false;
   const firstName = a.headers[0];
-  // Get the first column values from sampleRows + numeric stats if available.
   const numericCol = a.columns.find((c) => c.name === firstName);
   if (!numericCol) {
-    // Try parsing sample rows.
     const vals = a.sampleRows
       .map((r) => Number(r[0]))
       .filter((v) => Number.isFinite(v));
     return checkSequential(vals);
   }
-  // We don't have the raw numeric array here, but we have count + range.
-  // Use min, max, count to test for an even step.
   if (numericCol.count >= 3) {
     const span = numericCol.max - numericCol.min;
     if (span <= 0) return false;
     const step = span / (numericCol.count - 1);
-    // Step ≈ 1 → likely 1..n indices
     if (Math.abs(step - 1) < 0.01 && Math.abs(numericCol.min - Math.round(numericCol.min)) < 0.01) {
       return true;
     }
@@ -751,33 +751,44 @@ function checkSequential(vals: number[]): boolean {
 }
 
 function SuggestionCard({ s }: { s: Suggestion }) {
+  const { Icon } = s;
   return (
-    <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/40 hover:border-orange-300 dark:hover:border-orange-700/60 hover:bg-orange-50/30 dark:hover:bg-orange-950/10 transition-all p-3.5">
-      <div className="flex items-start gap-2 mb-1">
-        <span className="text-base leading-none mt-0.5" aria-hidden="true">{s.emoji}</span>
-        <div className="text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-snug flex-1 min-w-0">{s.title}</div>
-      </div>
-      <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed mb-2.5 pl-6">{s.why}</p>
-      <div className="flex flex-wrap gap-1.5 pl-6">
-        {s.buttons.map((b) => {
-          const label = findTool(b.toolId)?.name ?? b.label;
-          return (
-            <Link
-              key={b.toolId}
-              href={`/app?tool=${b.toolId}`}
-              className="group inline-flex items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-white dark:hover:bg-neutral-800 hover:border-orange-300 dark:hover:border-orange-700/60 px-2.5 py-1 transition-all"
-            >
-              <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 group-hover:text-orange-600 dark:group-hover:text-orange-400">{label}</span>
-              <ArrowRight className="w-3 h-3 text-neutral-300 dark:text-neutral-600 group-hover:text-orange-500 transition-colors" />
-            </Link>
-          );
-        })}
+    <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/40 hover:border-neutral-300 dark:hover:border-neutral-700 transition-all p-3.5">
+      <div className="flex items-start gap-3">
+        <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 shrink-0">
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-snug">
+            {s.title}
+          </div>
+          <p className="mt-0.5 text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
+            {s.subtitle}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+          {s.buttons.map((b) => {
+            const label = findTool(b.toolId)?.name ?? b.label;
+            return (
+              <Link
+                key={b.toolId}
+                href={`/app?tool=${b.toolId}`}
+                className="group inline-flex items-center gap-1 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 hover:bg-white dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-600 px-2.5 py-1 transition-all"
+              >
+                <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">
+                  {label}
+                </span>
+                <ArrowRight className="w-3 h-3 text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-500 dark:group-hover:text-neutral-300 transition-colors" />
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-/* ── Section 3 sub-components ────────────────────────────────────────── */
+/* ── Detailed-stats sub-components ───────────────────────────────────── */
 
 function ColumnCard({ col }: { col: ColumnStats }) {
   const distColor =
@@ -821,7 +832,7 @@ function CorrelationPill({ corr }: { corr: { col1: string; col2: string; r: numb
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] ${color}`}>
       <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[80px]">{corr.col1}</span>
-      <span className="text-neutral-300 dark:text-neutral-600">↔</span>
+      <span className="text-neutral-400 dark:text-neutral-600">vs</span>
       <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[80px]">{corr.col2}</span>
       <span className="font-mono font-medium text-neutral-800 dark:text-neutral-200">{sign}{corr.r.toFixed(2)}</span>
     </span>
@@ -832,4 +843,21 @@ function fmt(n: number): string {
   if (Number.isInteger(n) && Math.abs(n) < 1e6) return String(n);
   if (Math.abs(n) < 0.01 && n !== 0) return n.toExponential(2);
   return n.toFixed(2);
+}
+
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+
+/**
+ * Strip emoji and other pictographic symbols from text. Used to sanitize
+ * server-generated insight text before rendering, so the UI stays clinical.
+ */
+function stripEmoji(text: string): string {
+  if (!text) return text;
+  // Extended_Pictographic covers emoji incl. modifiers, plus dingbats &
+  // misc symbols. ️ strips variation-selector-16 (emoji presentation).
+  return text
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/️/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Menu, X, GraduationCap, Construction, Search, Command, SendHorizonal,
   TrendingUp, Activity, FlaskConical, GitBranch, BarChart3, Layers, Link2,
+  Database,
 } from "lucide-react";
 
 import { TOOLS, findTool, type Tool } from "@/lib/tools";
@@ -13,7 +14,7 @@ import LabDashboard, { recordRecentTool } from "@/components/LabDashboard";
 import CommandPalette from "@/components/CommandPalette";
 import ThemeToggle from "@/components/ThemeToggle";
 import { WorkspaceProvider } from "@/components/workspace/WorkspaceProvider";
-import DatasetSidebar from "@/components/workspace/DatasetSidebar";
+import DataStrip from "@/components/workspace/DataStrip";
 
 export default function AppClient() {
   const sp = useSearchParams();
@@ -79,7 +80,7 @@ export default function AppClient() {
 
   return (
     <WorkspaceProvider>
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors pb-12">
       <CommandPalette />
 
       <header className="sticky top-0 z-30 bg-white/85 dark:bg-neutral-950/85 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800">
@@ -164,13 +165,14 @@ export default function AppClient() {
             <Link
               href="/app"
               onClick={() => setNavOpen(false)}
-              className={`block rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
                 !toolParam
                   ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
                   : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
               }`}
             >
-              Dashboard
+              <Database className="w-3.5 h-3.5" />
+              Data
             </Link>
             {groups.map(([group, ts], gi) => {
               const SIDEBAR_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -235,6 +237,8 @@ export default function AppClient() {
           onClose={() => router.push(tool ? `/app?tool=${tool.id}` : "/app")}
         />
       )}
+
+      <DataStrip />
     </div>
     </WorkspaceProvider>
   );
@@ -250,7 +254,6 @@ function ToolCanvas({ tool }: { tool: Tool }) {
         <h1 className="font-medium tracking-tight text-3xl mt-1 text-neutral-900 dark:text-neutral-100">{tool.name}</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400 max-w-2xl">{tool.blurb}</p>
       </header>
-      <DatasetSidebar />
       <C />
     </div>
   );

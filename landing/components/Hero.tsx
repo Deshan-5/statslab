@@ -35,13 +35,14 @@ export default function Hero() {
             transition={{ duration: 0.6, ease: "easeOut" }}
           >
             <h1 className="font-medium tracking-tightest text-5xl md:text-7xl leading-[1.02] text-neutral-900">
-              Drop a dataset.{" "}
+              Drop data.{" "}
               <span className="sl-ai-gradient font-semibold">
-                Get instant statistical insights.
-              </span>
+                Get statistical insights.
+              </span>{" "}
+              No install.
             </h1>
             <p className="mt-6 text-xl text-neutral-600 max-w-lg leading-relaxed">
-              From data to insights, instantly.
+              CSV in, analysis out. Runs entirely in the browser.
             </p>
             <div className="mt-10 flex items-center gap-4 flex-wrap">
               <Link

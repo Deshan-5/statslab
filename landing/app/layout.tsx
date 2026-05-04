@@ -19,9 +19,9 @@ const serif = Source_Serif_4({
 const SITE = "https://statslab.io";
 const TITLE = "Stats Lab — Interactive Statistics Workbench";
 const DESCRIPTION =
-  "Drop a dataset, see it analyzed instantly across 20+ tools — no AI fluff, " +
-  "just statistics. Histograms, regressions, hypothesis tests and more, " +
-  "all in your browser.";
+  "Drop a CSV. See it analyzed across 22 statistical tools — distributions, " +
+  "regression, hypothesis tests, Bayesian, causal, time series. " +
+  "No install. No paywall.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
