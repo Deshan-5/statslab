@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+html, body {
+  @apply antialiased;
+  font-feature-settings: "ss01", "cv11";
+}
+
+::selection { background: #fde68a; color: #0a0a0a; }
+.dark ::selection { background: #a16207; color: #fafaf7; }
+
+/* ── Chart color tokens (inherited by inline SVGs via var() refs) ─────── */
+:root {
+  --chart-bg:      #ffffff;
+  --chart-ink:     #171717;
+  --chart-muted:   #737373;
+  --chart-axis:    #e5e5e5;
+  --chart-grid:    #f3f3f3;
+  --chart-accent:  #fb923c;
+  --chart-success: #16a34a;
+  --chart-danger:  #dc2626;
+}
+.dark {
+  --chart-bg:      #0a0a0a;
+  --chart-ink:     #e5e5e5;
+  --chart-muted:   #a3a3a3;
+  --chart-axis:    #262626;
+  --chart-grid:    #1a1a1a;
+  --chart-accent:  #fb923c;
+  --chart-success: #4ade80;
+  --chart-danger:  #f87171;
+
+  color-scheme: dark;
+}
+
+/* Range input — light + dark surfaces */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #e5e5e5;
+  border-radius: 999px;
+  outline: none;
+}
+.dark input[type="range"] { background: #404040; }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #0a0a0a;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  cursor: grab;
+}
+.dark input[type="range"]::-webkit-slider-thumb {
+  background: #fafafa;
+  border-color: #0a0a0a;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #0a0a0a; border: 2px solid #ffffff; cursor: grab;
+}
+.dark input[type="range"]::-moz-range-thumb {
+  background: #fafafa; border-color: #0a0a0a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Subtle fade for command palette */
+.cmdk-overlay { animation: cmdkFade 0.12s ease-out; }
+@keyframes cmdkFade { from { opacity: 0; } to { opacity: 1; } }
+.cmdk-panel { animation: cmdkSlide 0.16s ease-out; }
+@keyframes cmdkSlide {
+  from { opacity: 0; transform: translateY(-6px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Animated gradient text — used on the "AI" word in the hero headline. */
+.sl-ai-gradient {
+  background-image: linear-gradient(
+    110deg,
+    #fb923c 0%,
+    #f43f5e 25%,
+    #d946ef 50%,
+    #8b5cf6 75%,
+    #fb923c 100%
+  );
+  background-size: 220% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: aiShift 8s ease-in-out infinite;
+  /* a touch of glow that adapts in dark mode */
+  filter: drop-shadow(0 0 0.6rem rgba(217, 70, 239, 0.18));
+}
+.dark .sl-ai-gradient {
+  filter: drop-shadow(0 0 0.9rem rgba(217, 70, 239, 0.35));
+}
+@keyframes aiShift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
