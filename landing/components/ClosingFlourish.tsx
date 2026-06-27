@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 
 const W = 480, H = 360;
 const N_POINTS = 70;
@@ -33,13 +34,14 @@ function makePoints(): { x: number; y: number; z: number; cluster: number }[] {
 }
 
 const POINTS = makePoints();
-const CLUSTER_COLORS = ["#171717", "#fb923c", "#737373"];
 
 export default function ClosingFlourish() {
   const [yaw, setYaw] = useState(0);
   const [pitch, setPitch] = useState(0.25);
   const draggingRef = useRef(false);
   const lastRef = useRef({ x: 0, y: 0 });
+  const { status } = useSession();
+  const labHref = status === "authenticated" ? "/app" : "/signin";
 
   useEffect(() => {
     let raf = 0;
@@ -71,14 +73,14 @@ export default function ClosingFlourish() {
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
-    <section className="mx-auto max-w-7xl px-6 py-24 md:py-32 text-center">
-      <p className="text-sm text-neutral-500 mb-6">
+    <section className="w-full px-6 md:px-12 py-16 md:py-24 text-center">
+      <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-6">
         PCA projection. Try dragging to rotate!
       </p>
 
       <Link
-        href="/app"
-        className="mx-auto max-w-2xl block rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+        href={labHref}
+        className="mx-auto max-w-2xl block rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
         aria-label="Open Stats Lab"
       >
         <svg
@@ -114,9 +116,9 @@ export default function ClosingFlourish() {
             const az = project({ x: 0, y: 0, z: 1.4 });
             return (
               <g opacity={0.45}>
-                <line x1={o.sx} y1={o.sy} x2={ax.sx} y2={ax.sy} stroke="#d4d4d4" />
-                <line x1={o.sx} y1={o.sy} x2={ay.sx} y2={ay.sy} stroke="#d4d4d4" />
-                <line x1={o.sx} y1={o.sy} x2={az.sx} y2={az.sy} stroke="#d4d4d4" />
+                <line x1={o.sx} y1={o.sy} x2={ax.sx} y2={ax.sy} stroke="currentColor" className="text-neutral-300 dark:text-neutral-700" />
+                <line x1={o.sx} y1={o.sy} x2={ay.sx} y2={ay.sy} stroke="currentColor" className="text-neutral-300 dark:text-neutral-700" />
+                <line x1={o.sx} y1={o.sy} x2={az.sx} y2={az.sy} stroke="currentColor" className="text-neutral-300 dark:text-neutral-700" />
               </g>
             );
           })()}
@@ -125,13 +127,25 @@ export default function ClosingFlourish() {
             const tFront = (depth + 1.5) / 3;
             const r = 3 + tFront * 3.5;
             const opacity = 0.35 + tFront * 0.6;
+            let fillClass = "";
+            let fillHex = "";
+            if (p.cluster === 0) {
+              fillClass = "text-neutral-900 dark:text-neutral-100";
+              fillHex = "currentColor";
+            } else if (p.cluster === 1) {
+              fillHex = "#fb923c";
+            } else {
+              fillClass = "text-neutral-450 dark:text-neutral-500";
+              fillHex = "currentColor";
+            }
             return (
               <circle
                 key={i}
                 cx={sx}
                 cy={sy}
                 r={r}
-                fill={CLUSTER_COLORS[p.cluster]}
+                fill={fillHex}
+                className={fillClass}
                 opacity={opacity}
               />
             );
@@ -139,19 +153,19 @@ export default function ClosingFlourish() {
         </svg>
       </Link>
 
-      <h2 className="mt-14 font-medium tracking-tightest text-5xl md:text-6xl leading-[1.05] text-neutral-900">
-        Drop your data. Explore the tools.
+      <h2 className="mt-10 font-medium tracking-tightest text-5xl md:text-6xl leading-[1.05] text-neutral-900 dark:text-neutral-100">
+        From your first CSV to{" "}
+        <span className="sl-ai-gradient">your first neural network.</span>
       </h2>
-      <p className="mt-5 text-lg text-neutral-600 max-w-xl mx-auto">
-        Twenty-plus statistics tools, every one of them ready the moment your
-        CSV lands.
+      <p className="mt-5 text-lg text-neutral-600 dark:text-neutral-400 max-w-xl mx-auto">
+        33 tools spanning statistics, machine learning, and AI — all interactive, all in the browser. Drop your data and start.
       </p>
 
       <Link
-        href="/app"
-        className="mt-10 inline-flex items-center rounded-full bg-neutral-900 text-white px-8 py-3 text-base font-medium hover:bg-neutral-800 transition-colors"
+        href={labHref}
+        className="mt-10 inline-flex items-center rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-8 py-3 text-base font-medium hover:opacity-90 transition-opacity"
       >
-        Open the lab
+        Enter the Lab
       </Link>
     </section>
   );

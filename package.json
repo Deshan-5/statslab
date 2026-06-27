@@ -1,0 +1,16 @@
+{
+  "name": "statslab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stats Lab — Interactive Statistics Workbench. Root workspace delegator.",
+  "scripts": {
+    "dev":     "npm run dev     --prefix landing",
+    "build":   "npm run build   --prefix landing",
+    "start":   "npm run start   --prefix landing",
+    "lint":    "npm run lint    --prefix landing",
+    "install": "npm install     --prefix landing"
+  },
+  "engines": {
+    "node": ">=18 <22"
+  }
+}

@@ -55,14 +55,14 @@ export default function LinearRegressionDemo() {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#e5e5e5" />
-      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#e5e5e5" />
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
+      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="var(--chart-axis)" />
       <line
         x1={sx(xMin)}
         y1={sy(intercept + slope * xMin)}
         x2={sx(xMax)}
         y2={sy(intercept + slope * xMax)}
-        stroke="#171717"
+        stroke="#6366f1"
         strokeWidth={2}
         style={{ transition: "all 0.6s ease" }}
       />

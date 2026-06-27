@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { pearsonR, tCDF } from "./shared/stats";
 import {
-  Tabs, Stat, DataTextArea, SampleDataButton, Panel, Select,
+  Tabs, Stat, DataTextArea, SampleDataButton, Panel, Select, Interpretation,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 
@@ -52,6 +53,7 @@ export default function HeatmapTool() {
   const [scale, setScale] = useState<"diverging" | "sequential">("diverging");
   const [hover, setHover] = useState<{ i: number; j: number } | null>(null);
 
+  useRegisterToolState("heatmap", { tab, scale }, { tab: setTab, scale: setScale });
   const wsMatrix = useMemo(() => {
     if (!dataset || numericColumns.length < 2) return null;
     // Use only rows where all numeric columns have a value
@@ -129,18 +131,38 @@ export default function HeatmapTool() {
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Panel>
+        <Panel>
             {!matrix ? (
               <div className="text-sm text-neutral-500 text-center py-12">
                 {tab === "Workspace" ? "Need at least 2 numeric columns." : "Paste a CSV with header row."}
               </div>
             ) : (
               <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-                {matrix.names.map((n, j) => (
-                  <text key={`x${j}`} x={PAD + (j + 0.5) * cellSize} y={PAD - 12} textAnchor="middle" fontSize="11" fill="var(--chart-muted)">{n}</text>
-                ))}
+                {(() => {
+                  const isRotated = matrix.names.length > 5 || matrix.names.some(name => name.length > 8);
+                  return matrix.names.map((n, j) => {
+                    const x = PAD + (j + 0.5) * cellSize;
+                    const y = PAD - 12;
+                    const displayVal = n.length > 14 ? n.slice(0, 12) + "..." : n;
+                    return (
+                      <text
+                        key={`x${j}`}
+                        x={x}
+                        y={y}
+                        textAnchor={isRotated ? "start" : "middle"}
+                        fontSize="10"
+                        fill="var(--chart-muted)"
+                        transform={isRotated ? `rotate(-35, ${x}, ${y})` : undefined}
+                      >
+                        {displayVal}
+                      </text>
+                    );
+                  });
+                })()}
                 {matrix.names.map((n, i) => (
-                  <text key={`y${i}`} x={PAD - 10} y={PAD + (i + 0.5) * cellSize + 4} textAnchor="end" fontSize="11" fill="var(--chart-muted)">{n}</text>
+                  <text key={`y${i}`} x={PAD - 10} y={PAD + (i + 0.5) * cellSize + 4} textAnchor="end" fontSize="10" fill="var(--chart-muted)">
+                    {n.length > 14 ? n.slice(0, 12) + "..." : n}
+                  </text>
                 ))}
                 {matrix.matrix.map((row, i) =>
                   row.map((v, j) => {
@@ -151,11 +173,13 @@ export default function HeatmapTool() {
                          onMouseLeave={() => setHover(null)}>
                         <rect x={PAD + j * cellSize} y={PAD + i * cellSize} width={cellSize} height={cellSize}
                               fill={color(v)} stroke="#fff" strokeWidth={1} rx={2} />
-                        <text x={PAD + (j + 0.5) * cellSize} y={PAD + (i + 0.5) * cellSize + 4}
-                              textAnchor="middle" fontSize="10"
-                              fill={Math.abs(v) > 0.5 ? "#fff" : "#171717"}>
-                          {v.toFixed(2)}{stars(p)}
-                        </text>
+                        {cellSize >= 32 && (
+                          <text x={PAD + (j + 0.5) * cellSize} y={PAD + (i + 0.5) * cellSize + 4}
+                                textAnchor="middle" fontSize="9"
+                                fill={Math.abs(v) > 0.5 ? "#fff" : "#171717"}>
+                            {v.toFixed(2)}{stars(p)}
+                          </text>
+                        )}
                       </g>
                     );
                   }),
@@ -163,16 +187,7 @@ export default function HeatmapTool() {
               </svg>
             )}
           </Panel>
-          {interpretation && (
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {interpretation}
-              </p>
-            </div>
-          )}
+          <Interpretation text={interpretation} />
         </div>
         <Panel className="space-y-5">
           {tab === "Workspace" && dataset && (

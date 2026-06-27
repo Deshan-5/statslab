@@ -43,7 +43,7 @@ export default function BootstrapDemo() {
               initial={false}
               animate={{ y: yTop + (rowH - h), height: h }}
               transition={{ duration: 0.45, ease: "easeOut", delay: i * 0.02 }}
-              fill={accent ? "#fb923c" : "#171717"}
+              fill={accent ? "#fb923c" : "var(--chart-ink)"}
               fillOpacity={accent ? 0.9 : 0.85}
               rx={1.5}
             />

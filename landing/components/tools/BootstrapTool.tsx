@@ -6,10 +6,11 @@ import {
 } from "./shared/stats";
 import {
   Tabs, Field, Stat, NumberInput, DataTextArea, Select, SampleDataButton,
-  Panel, Btn, Formula,
+  Panel, Btn, Formula, Interpretation, useTutorInput, useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
+import { useWorker } from "@/hooks/useWorker";
 
 const SAMPLE = "12, 14, 9, 18, 22, 11, 13, 19, 16, 15, 14, 17, 12, 21, 10, 13, 18, 16, 14, 12";
 
@@ -36,6 +37,33 @@ export default function BootstrapTool() {
   const [running, setRunning] = useState(false);
   const [valueCol, setValueCol] = useState<string | null>(null);
 
+  const { run, loading: workerLoading, result: workerResult } = useWorker<{ data: number[]; stat: Statistic; B: number }, number[]>();
+
+  useEffect(() => {
+    if (workerResult) {
+      setStats(workerResult);
+    }
+  }, [workerResult]);
+
+  useTutorInput({
+    B: setB,
+    stat: (val) => {
+      if (["mean", "median", "sd", "p25", "p75"].includes(val)) {
+        setStat(val as Statistic);
+      }
+    },
+    reset: () => setStats([]),
+  });
+
+  useRegisterToolState("bootstrap-sampling", { tab, raw, stat, B, animated, valueCol }, {
+    tab: setTab,
+    raw: setRaw,
+    stat: (val) => { if (["mean", "median", "sd", "p25", "p75"].includes(val)) setStat(val as Statistic); },
+    B: setB,
+    animated: setAnimated,
+    valueCol: setValueCol,
+  });
+
   const wsData = useMemo(() => {
     if (!dataset || !valueCol) return null;
     const c = dataset.columns.find((c) => c.name === valueCol);
@@ -47,12 +75,7 @@ export default function BootstrapTool() {
 
   function runAll() {
     if (data.length < 2) return;
-    const out: number[] = [];
-    for (let i = 0; i < B; i++) {
-      const re = Array.from({ length: data.length }, () => data[Math.floor(Math.random() * data.length)]);
-      out.push(compute(stat, re));
-    }
-    setStats(out);
+    run("RUN_BOOTSTRAP", { data, stat, B });
   }
 
   function runAnimated() {
@@ -122,7 +145,7 @@ export default function BootstrapTool() {
       <Tabs tabs={dataset ? ["Workspace", "Your Data"] : ["Your Data"]} active={tab} onChange={setTab} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Panel>
+        <Panel>
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
               <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
               {counts.map((c, i) => (
@@ -145,16 +168,7 @@ export default function BootstrapTool() {
               )}
             </svg>
           </Panel>
-          {interpretation && (
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {interpretation}
-              </p>
-            </div>
-          )}
+          <Interpretation text={interpretation} />
         </div>
         <Panel className="space-y-5">
           {tab === "Workspace" && dataset ? (
@@ -183,7 +197,7 @@ export default function BootstrapTool() {
             Animate accumulation
           </label>
           <Btn primary onClick={() => animated ? runAnimated() : runAll()}>
-            {running ? "Running…" : "Run bootstrap"}
+            {running || workerLoading ? "Running…" : "Run bootstrap"}
           </Btn>
           <Stat label="Observed" value={observed.toFixed(4)} />
           <Stat label="Bootstrap mean" value={bootMean.toFixed(4)} />

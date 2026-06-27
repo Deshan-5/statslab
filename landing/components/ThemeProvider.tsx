@@ -12,7 +12,7 @@ const ThemeCtx = createContext<{
   resolved: Resolved;
   setTheme: (t: Theme) => void;
   cycle: () => void;
-}>({ theme: "system", resolved: "light", setTheme: () => {}, cycle: () => {} });
+}>({ theme: "light", resolved: "light", setTheme: () => {}, cycle: () => {} });
 
 function systemPref(): Resolved {
   if (typeof window === "undefined") return "light";
@@ -26,13 +26,13 @@ function applyHtmlClass(t: Resolved) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
+  const [theme, setThemeState] = useState<Theme>("light");
   const [resolved, setResolved] = useState<Resolved>("light");
 
   // Hydrate from localStorage. The anti-FOUC inline script in layout.tsx
   // sets the class before React hydrates; here we just sync state.
   useEffect(() => {
-    let initial: Theme = "system";
+    let initial: Theme = "light";
     try {
       const stored = localStorage.getItem(KEY) as Theme | null;
       if (stored === "dark" || stored === "light" || stored === "system") initial = stored;
@@ -87,7 +87,8 @@ try {
   const k = "statslab_theme";
   const t = localStorage.getItem(k);
   const sys = matchMedia("(prefers-color-scheme: dark)").matches;
-  const dark = t === "dark" || (t === "system" && sys) || (!t && sys);
+  const dark = t === "dark" || (t === "system" && sys);
   if (dark) document.documentElement.classList.add("dark");
+  else document.documentElement.classList.remove("dark");
 } catch (e) {}
 `;

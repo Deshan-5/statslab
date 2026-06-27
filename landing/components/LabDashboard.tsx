@@ -56,7 +56,7 @@ export default function LabDashboard() {
   const [pinned, setPinned] = useState<string[]>([]);
   const [now, setNow] = useState(() => new Date());
   const [isMac, setIsMac] = useState(true);
-  const { loadExample } = useWorkspace();
+  const { loadExample, dataset } = useWorkspace();
 
   useEffect(() => {
     try {
@@ -109,154 +109,133 @@ export default function LabDashboard() {
   const greetText = greeting(now);
   const dateLabel = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
+  if (dataset) {
+    return (
+      <div className="h-full flex flex-col">
+        <DataDropZone />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-8 max-w-5xl">
-      {/* ── Hero header (compact) ──────────────────────────────────── */}
-      <header className="pt-1">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400 dark:text-neutral-500 mb-2">
-          {dateLabel}
-        </p>
-        <h1 className="font-medium tracking-tight text-3xl md:text-4xl leading-[1.1] text-neutral-900 dark:text-neutral-100">
-          {greetText}<span className="text-orange-400">.</span>
-        </h1>
+    <div className="relative min-h-full w-full py-2 overflow-visible flex flex-col items-center">
 
-        {/* Search prompt — primary CTA */}
-        <button
-          onClick={openPalette}
-          className="mt-4 w-full max-w-md flex items-center gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 hover:border-neutral-300 dark:hover:border-neutral-700 hover:shadow-sm px-4 py-2.5 text-sm text-neutral-400 dark:text-neutral-500 transition-all group"
-        >
-          <Search className="w-4 h-4 shrink-0 group-hover:text-neutral-600 dark:group-hover:text-neutral-300 transition-colors" />
-          <span className="flex-1 text-left">Search tools…</span>
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-1.5 py-0.5 font-mono text-[10px] text-neutral-400 dark:text-neutral-500">
-            {isMac ? <Command className="w-2.5 h-2.5" /> : "Ctrl"} K
-          </kbd>
-        </button>
-      </header>
+      <div className="space-y-8 max-w-4xl w-full mx-auto relative flex flex-col items-center text-center">
+        {/* ── Hero header (compact) ──────────────────────────────────── */}
+        <header className="pt-2 text-center flex flex-col items-center select-none">
+          <p className="text-[10px] tracking-[0.25em] font-light text-neutral-400 dark:text-neutral-500 mb-2 uppercase">
+            {dateLabel}
+          </p>
+          <h1 className="font-medium tracking-tight text-3xl md:text-4xl leading-[1.1] text-neutral-900 dark:text-neutral-100">
+            {greetText}<span className="text-orange-400">.</span>
+          </h1>
+        </header>
 
-      {/* ── Data drop zone ──────────────────────────────────────────── */}
-      <DataDropZone />
+        {/* ── Data drop zone ──────────────────────────────────────────── */}
+        <div className="w-full max-w-2xl mx-auto">
+          <DataDropZone />
+        </div>
 
-      {/* ── Recent strip (only if there's data) ─────────────────────── */}
-      {recentResolved.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Clock className="w-3.5 h-3.5 text-neutral-400 dark:text-neutral-500" />
-            <span className="text-[11px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500">
-              Recent tools
+        {/* ── Pinned tools (only if user has pins) ────────────────────── */}
+        {pinnedResolved.length > 0 && (
+          <section className="w-full max-w-3xl">
+            <div className="flex items-center justify-center gap-2 mb-3">
+              <Star className="w-3.5 h-3.5 text-orange-400" fill="currentColor" />
+              <span className="text-[11px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500 font-bold">
+                Pinned
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 justify-center">
+              {pinnedResolved.map((t) => (
+                <ToolRow key={t.id} tool={t} pinned onTogglePin={togglePin} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Quick start — three onboarding cards ──────────────────── */}
+        <section className="space-y-4 w-full max-w-3xl">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-400 dark:text-neutral-500 font-bold select-none">
+              Workspace Quick Start
             </span>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-            {recentResolved.map(({ tool, ts }) => (
-              <Link
-                key={tool.id}
-                href={`/app?tool=${tool.id}`}
-                className="group shrink-0 flex items-center gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 hover:border-neutral-300 dark:hover:border-neutral-700 hover:shadow-sm px-4 py-2.5 transition-all"
-              >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
-                    {tool.name}
-                  </div>
-                  <div className="text-[10px] text-neutral-400 dark:text-neutral-500 font-mono mt-0.5">
-                    {relativeTime(ts)}
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Card 1 — Drop a CSV */}
+            <div className="group rounded-2xl border border-neutral-250 dark:border-neutral-800 bg-white/40 dark:bg-neutral-900/30 backdrop-blur-md p-5 flex flex-col items-center justify-between text-center hover:border-orange-400/40 dark:hover:border-orange-500/30 hover:shadow-[0_12px_32px_rgba(249,115,22,0.05)] dark:hover:shadow-[0_12px_32px_rgba(249,115,22,0.12)] hover:-translate-y-1 hover:bg-orange-500/[0.01] transition-all duration-300">
+              <div className="space-y-3 flex flex-col items-center">
+                <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center transition-colors group-hover:bg-orange-500/20">
+                  <Upload className="w-4 h-4" />
                 </div>
-                <ArrowRight className="w-3.5 h-3.5 text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-600 dark:group-hover:text-neutral-300 transition-colors shrink-0" />
-              </Link>
-            ))}
+                <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+                  Load a Dataset
+                </h3>
+                <p className="text-[12px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+                  Drag and drop any CSV or TSV file onto the workspace drop zone above, or paste raw text.
+                </p>
+              </div>
+            </div>
+
+            {/* Card 2 — Pick a tool */}
+            <button
+              onClick={openPalette}
+              className="group rounded-2xl border border-neutral-250 dark:border-neutral-800 bg-white/40 dark:bg-neutral-900/30 backdrop-blur-md p-5 flex flex-col items-center justify-between text-center hover:border-violet-400/40 dark:hover:border-violet-500/30 hover:shadow-[0_12px_32px_rgba(139,92,246,0.05)] dark:hover:shadow-[0_12px_32px_rgba(139,92,246,0.12)] hover:-translate-y-1 hover:bg-violet-500/[0.01] active:scale-[0.99] transition-all duration-300"
+            >
+              <div className="space-y-3 flex flex-col items-center">
+                <div className="w-9 h-9 rounded-xl bg-violet-500/10 text-violet-500 dark:text-violet-400 flex items-center justify-center transition-colors group-hover:bg-violet-500/20">
+                  <MousePointerClick className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+                  Interactive Instruments
+                </h3>
+                <p className="text-[12px] leading-relaxed text-neutral-500 dark:text-neutral-400">
+                  Select a statistical tool from the sidebar or press <kbd className="bg-neutral-100 dark:bg-neutral-800 px-1 py-0.5 rounded font-mono text-[10px] mx-0.5">{isMac ? "⌘" : "Ctrl-"}K</kbd> to quickly search.
+                </p>
+              </div>
+            </button>
+
+            {/* Card 3 — Try an example */}
+            <div className="group rounded-2xl border border-neutral-250 dark:border-neutral-800 bg-white/40 dark:bg-neutral-900/30 backdrop-blur-md p-5 flex flex-col items-center justify-between text-center hover:border-emerald-400/40 dark:hover:border-emerald-500/30 hover:shadow-[0_12px_32px_rgba(16,185,129,0.05)] dark:hover:shadow-[0_12px_32px_rgba(16,185,129,0.12)] hover:-translate-y-1 hover:bg-emerald-500/[0.01] transition-all duration-300">
+              <div className="space-y-3 flex flex-col items-center w-full">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 flex items-center justify-center transition-colors group-hover:bg-emerald-500/20">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+                  Try Sandbox Datasets
+                </h3>
+                <p className="text-[12px] leading-relaxed text-neutral-500 dark:text-neutral-400 mb-1">
+                  Instantly load statistical sample data to test workflows:
+                </p>
+                <div className="flex flex-wrap gap-1.5 justify-center pt-1">
+                  <button
+                    onClick={() => loadExample("iris")}
+                    className="text-[10px] font-semibold rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-950/60 hover:border-emerald-500 dark:hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-450 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 active:scale-95 transition-all duration-150"
+                  >
+                    Iris
+                  </button>
+                  <button
+                    onClick={() => loadExample("heights")}
+                    className="text-[10px] font-semibold rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-950/60 hover:border-emerald-500 dark:hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-450 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 active:scale-95 transition-all duration-150"
+                  >
+                    Heights
+                  </button>
+                  <button
+                    onClick={() => loadExample("abtest")}
+                    className="text-[10px] font-semibold rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-950/60 hover:border-emerald-500 dark:hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-450 text-neutral-700 dark:text-neutral-300 px-2.5 py-1 active:scale-95 transition-all duration-150"
+                  >
+                    A/B Test
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
-      )}
 
-      {/* ── Pinned tools (only if user has pins) ────────────────────── */}
-      {pinnedResolved.length > 0 && (
-        <section>
-          <div className="flex items-center gap-2 mb-3">
-            <Star className="w-3.5 h-3.5 text-orange-400" fill="currentColor" />
-            <span className="text-[11px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500">
-              Pinned
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {pinnedResolved.map((t) => (
-              <ToolRow key={t.id} tool={t} pinned onTogglePin={togglePin} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ── Quick start — three onboarding cards ──────────────────── */}
-      <section>
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-[11px] uppercase tracking-[0.18em] text-neutral-400 dark:text-neutral-500">
-            Quick start
-          </span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Card 1 — Drop a CSV */}
-          <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Upload className="w-3.5 h-3.5 text-orange-500" />
-              <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                Drop a CSV
-              </span>
-            </div>
-            <p className="text-[12px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Drag a file onto the panel above, or click to browse local files.
-            </p>
-          </div>
-
-          {/* Card 2 — Pick a tool */}
-          <button
-            onClick={openPalette}
-            className="text-left rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 hover:border-neutral-300 dark:hover:border-neutral-700 hover:shadow-sm p-4 transition-all"
-          >
-            <div className="flex items-center gap-2 mb-2">
-              <MousePointerClick className="w-3.5 h-3.5 text-orange-500" />
-              <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                Pick a tool
-              </span>
-            </div>
-            <p className="text-[12px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Press {isMac ? "⌘K" : "Ctrl K"} to jump to any of 22 tools by name.
-            </p>
-          </button>
-
-          {/* Card 3 — Try an example */}
-          <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/60 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-              <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                Try an example
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={() => loadExample("iris")}
-                className="text-[12px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/60 hover:border-orange-300 dark:hover:border-orange-700 hover:text-orange-600 dark:hover:text-orange-400 text-neutral-700 dark:text-neutral-300 px-2 py-1 transition-colors"
-              >
-                Iris
-              </button>
-              <button
-                onClick={() => loadExample("heights")}
-                className="text-[12px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/60 hover:border-orange-300 dark:hover:border-orange-700 hover:text-orange-600 dark:hover:text-orange-400 text-neutral-700 dark:text-neutral-300 px-2 py-1 transition-colors"
-              >
-                Heights
-              </button>
-              <button
-                onClick={() => loadExample("abtest")}
-                className="text-[12px] rounded-md border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-800/60 hover:border-orange-300 dark:hover:border-orange-700 hover:text-orange-600 dark:hover:text-orange-400 text-neutral-700 dark:text-neutral-300 px-2 py-1 transition-colors"
-              >
-                A/B Test
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Footer ──────────────────────────────────────────────────── */}
-      <footer className="pt-4 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-400 dark:text-neutral-500">
-        <span className="font-mono">v0.1 · beta</span>
-      </footer>
+        {/* ── Footer ──────────────────────────────────────────────────── */}
+        <footer className="pt-4 border-t border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-400 dark:text-neutral-500 w-full select-none">
+          <span className="font-mono">v0.1 · beta</span>
+        </footer>
+      </div>
     </div>
   );
 }

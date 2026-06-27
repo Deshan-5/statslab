@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { parseNumbers, mean, sd, median, kde, silvermanBandwidth, quantile, skewness } from "./shared/stats";
 import {
-  Tabs, Field, DataTextArea, SampleDataButton, Panel, Btn,
+  Tabs, Field, DataTextArea, SampleDataButton, Panel, Btn, Interpretation,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -28,6 +29,7 @@ export default function ViolinTool() {
   const [valueCol, setValueCol] = useState<string | null>(null);
   const [groupCol, setGroupCol] = useState<string | null>(null);
 
+  useRegisterToolState("violin", { tab, bwMul, showPoints, showBox, showMean, valueCol, groupCol }, { tab: setTab, bwMul: setBwMul, showPoints: setShowPoints, showBox: setShowBox, showMean: setShowMean, valueCol: setValueCol, groupCol: setGroupCol });
   const wsParsed = useMemo(() => {
     if (!dataset || !valueCol) return [];
     const v = dataset.columns.find((c) => c.name === valueCol);
@@ -95,7 +97,7 @@ export default function ViolinTool() {
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Panel>
+        <Panel>
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
               {[0, 0.25, 0.5, 0.75, 1].map((f, i) => {
                 const v = yMin + (yMax - yMin) * f;
@@ -144,7 +146,24 @@ export default function ViolinTool() {
                           fillOpacity={sel ? 0.95 : 0.4} />
                       );
                     })}
-                    <text x={sx(i)} y={H - PAD + 18} textAnchor="middle" fontSize="11" fill="var(--chart-muted)">{g.name}</text>
+                    {(() => {
+                      const isRotated = parsed.length > 5 || parsed.some(s => s.name.length > 8);
+                      const displayVal = g.name.length > 15 ? g.name.slice(0, 13) + "..." : g.name;
+                      const tx = sx(i);
+                      const ty = H - PAD + 18;
+                      return (
+                        <text
+                          x={tx}
+                          y={ty}
+                          textAnchor={isRotated ? "end" : "middle"}
+                          fontSize="10"
+                          fill="var(--chart-muted)"
+                          transform={isRotated ? `rotate(-25, ${tx}, ${ty})` : undefined}
+                        >
+                          {displayVal}
+                        </text>
+                      );
+                    })()}
                   </g>
                 );
               })}
@@ -155,16 +174,7 @@ export default function ViolinTool() {
               )}
             </svg>
           </Panel>
-          {interpretation && (
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {interpretation}
-              </p>
-            </div>
-          )}
+          <Interpretation text={interpretation} />
         </div>
         <Panel className="space-y-5">
           {tab === "Workspace" && dataset && (
@@ -203,9 +213,18 @@ export default function ViolinTool() {
             <Toggle label="Show mean" value={showMean} onChange={setShowMean} />
           </div>
           <div>
-            <div className="text-xs uppercase tracking-wider text-neutral-500 mb-2">Per-group</div>
+            <div className="text-xs uppercase tracking-wider text-neutral-550 mb-2">Per-group stats</div>
             <table className="w-full text-xs font-mono">
-              <thead><tr className="text-neutral-400"><th className="text-left">Group</th><th>n</th><th>μ</th><th>median</th><th>SD</th></tr></thead>
+              <thead>
+                <tr className="text-neutral-400">
+                  <th className="text-left">Group</th>
+                  <th>n</th>
+                  <th>μ</th>
+                  <th>median</th>
+                  <th>SD</th>
+                  <th>h</th>
+                </tr>
+              </thead>
               <tbody>
                 {parsed.map((g) => (
                   <tr key={g.name} className="border-t border-neutral-100 dark:border-neutral-800">
@@ -214,6 +233,7 @@ export default function ViolinTool() {
                     <td className="text-center">{mean(g.data).toFixed(2)}</td>
                     <td className="text-center">{median(g.data).toFixed(2)}</td>
                     <td className="text-center">{sd(g.data).toFixed(2)}</td>
+                    <td className="text-center">{(silvermanBandwidth(g.data) * bwMul).toFixed(3)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -29,7 +29,7 @@ export default function HistogramDemo() {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#e5e5e5" />
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
       {heights.map((h, i) => {
         const barH = (h / max) * (H - 2 * PAD - 6);
         return (
@@ -40,7 +40,7 @@ export default function HistogramDemo() {
             initial={false}
             animate={{ y: H - PAD - barH, height: barH }}
             transition={{ type: "spring", stiffness: 90, damping: 18 }}
-            fill="#171717"
+            fill="var(--chart-ink)"
             fillOpacity={0.85}
             rx={2}
           />

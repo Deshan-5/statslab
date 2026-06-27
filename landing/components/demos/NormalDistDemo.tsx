@@ -32,9 +32,9 @@ export default function NormalDistDemo() {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#e5e5e5" />
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
       <path d={`${path} L${W - PAD},${H - PAD} L${PAD},${H - PAD} Z`} fill="#fbbf24" fillOpacity={0.18} />
-      <path d={path} fill="none" stroke="#171717" strokeWidth={2} strokeLinejoin="round" />
+      <path d={path} fill="none" stroke="var(--chart-ink)" strokeWidth={2} strokeLinejoin="round" />
       <text x={PAD} y={20} fontSize="10" fill="#737373">
         μ = {mu.toFixed(2)}   σ = {sigma.toFixed(2)}
       </text>

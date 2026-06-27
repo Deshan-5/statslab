@@ -74,12 +74,19 @@ export function useUrlState<T>(
         const liveSearch =
           typeof window !== "undefined" ? window.location.search : "";
         const params = new URLSearchParams(liveSearch);
-        const encoded = encodeURIComponent(encode(resolved));
-        params.set(key, encoded);
+        const encoded = encode(resolved);
 
-        const qs = params.toString();
-        const path = pathname ?? (typeof window !== "undefined" ? window.location.pathname : "/");
-        router.replace(qs ? `${path}?${qs}` : path, { scroll: false });
+        // Safeguard URL length limits to respect browser/proxy constraints
+        if (encoded.length < 2000) {
+          params.set(key, encoded);
+          const qs = params.toString();
+          const path = pathname ?? (typeof window !== "undefined" ? window.location.pathname : "/");
+          router.replace(qs ? `${path}?${qs}` : path, { scroll: false });
+        } else {
+          console.warn(
+            `State for key "${key}" is too large to safely serialize into URL (${encoded.length} chars). URL update skipped.`
+          );
+        }
 
         return resolved;
       });

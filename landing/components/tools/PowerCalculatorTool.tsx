@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { normalCDF, normalInv, mean as meanFn, sd as sdFn } from "./shared/stats";
 import {
-  Tabs, Stat, Panel, Select, Field, Formula,
+  Tabs, Stat, Panel, Select, Field, Formula, Interpretation,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -101,6 +102,7 @@ export default function PowerCalculatorTool() {
   };
 
   // Derived value depending on what we're solving for.
+  useRegisterToolState("power-calculator", { kind, tail, solve, d, n, alpha, power, tab }, { kind: setKind, tail: setTail, solve: setSolve, d: setD, n: setN, alpha: setAlpha, power: setPower, tab: setTab });
   const computed = useMemo(() => {
     if (solve === "power") return powerFn(kind, n, d, alpha, tail);
     if (solve === "n")     return solveN(kind, d, alpha, power, tail);
@@ -192,16 +194,7 @@ export default function PowerCalculatorTool() {
               </text>
             </svg>
           </Panel>
-          {interpretation && (
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {interpretation}
-              </p>
-            </div>
-          )}
+          <Interpretation text={interpretation} />
         </div>
 
         <Panel className="space-y-5">

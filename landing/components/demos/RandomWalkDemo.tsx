@@ -34,8 +34,8 @@ export default function RandomWalkDemo() {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={PAD} y1={sy(0)} x2={W - PAD} y2={sy(0)} stroke="#e5e5e5" strokeDasharray="3 3" />
-      <path d={path} fill="none" stroke="#171717" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+      <line x1={PAD} y1={sy(0)} x2={W - PAD} y2={sy(0)} stroke="var(--chart-axis)" strokeDasharray="3 3" />
+      <path d={path} fill="none" stroke="var(--chart-ink)" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
       {series.length > 0 && (
         <circle
           cx={sx(series.length - 1)}

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { parseNumbers, quantile, mean } from "./shared/stats";
 import {
   Tabs, DataTextArea, SampleDataButton, Panel, Btn,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -105,12 +106,13 @@ export default function BoxPlotTool() {
 
   const tabs = dataset ? ["Workspace", "Your Data"] : ["Your Data"];
 
+  useRegisterToolState("box-plot", { tab, strip, valueCol, groupCol }, { tab: setTab, strip: setStrip, valueCol: setValueCol, groupCol: setGroupCol });
   return (
     <div className="space-y-6">
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Panel>
+        <Panel>
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
               {[0.2, 0.4, 0.6, 0.8].map((f, i) => {
                 const v = yMin + (yMax - yMin) * f;
@@ -155,8 +157,25 @@ export default function BoxPlotTool() {
                         fillOpacity={sel ? 0.95 : 0.35} />
                     );
                   })}
-                  <text x={sx(i)} y={H - PAD + 18} textAnchor="middle" fontSize="11" fill="var(--chart-muted)">{s.name}</text>
-                </g>
+                    {(() => {
+                      const isRotated = stats.length > 5 || stats.some(s => s.name.length > 8);
+                      const displayVal = s.name.length > 15 ? s.name.slice(0, 13) + "..." : s.name;
+                      const tx = sx(i);
+                      const ty = H - PAD + 18;
+                      return (
+                        <text
+                          x={tx}
+                          y={ty}
+                          textAnchor={isRotated ? "end" : "middle"}
+                          fontSize="10"
+                          fill="var(--chart-muted)"
+                          transform={isRotated ? `rotate(-25, ${tx}, ${ty})` : undefined}
+                        >
+                          {displayVal}
+                        </text>
+                      );
+                    })()}
+                  </g>
                 );
               })}
               {!stats.length && (

@@ -73,6 +73,9 @@ type StoredState = {
   pastedHeaders?: string[];
   pastedRows?: (number | string | null)[][];
   pastedName?: string;
+  originalHeaders?: string[];
+  originalRows?: (number | string | null)[][];
+  activeFilters?: any[];
 };
 
 export function saveToStorage(s: StoredState) {

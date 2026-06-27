@@ -3,13 +3,14 @@
 import { useMemo, useState } from "react";
 import { parseNumbers, mean, sd } from "./shared/stats";
 import {
-  Tabs, DataTextArea, SampleDataButton, Panel, Btn, Field,
+  Tabs, DataTextArea, SampleDataButton, Panel, Btn, Field, Interpretation,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
 
 const W = 720, H = 320, PAD = 36;
-const COLORS = ["#171717", "#fb923c", "#0ea5e9", "#16a34a"];
+const COLORS = ["#6366f1", "#fb923c", "#0ea5e9", "#16a34a"];
 
 type Series = { name: string; raw: string };
 
@@ -37,6 +38,7 @@ export default function LineChartTool() {
   const [maWindow, setMaWindow] = useState(5);
   const [wsCols, setWsCols] = useState<(string | null)[]>([null, null]);
 
+  useRegisterToolState("line-chart", { tab, showMA, maWindow }, { tab: setTab, showMA: setShowMA, maWindow: setMaWindow });
   const wsValid = useMemo(() => {
     if (!dataset) return [];
     const out: { name: string; vals: number[] }[] = [];
@@ -90,6 +92,35 @@ export default function LineChartTool() {
   const sy = (v: number) => H - PAD - ((v - yMin) / (yMax - yMin)) * (H - 2 * PAD);
   const path = (vals: number[]) => vals.map((v, i) => `${i === 0 ? "M" : "L"}${sx(i).toFixed(2)},${sy(v).toFixed(2)}`).join(" ");
 
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!valid.length) return;
+    const svg = e.currentTarget;
+    const point = svg.createSVGPoint();
+    point.x = e.clientX;
+    point.y = e.clientY;
+    const svgPoint = point.matrixTransform(svg.getScreenCTM()?.inverse() || new DOMMatrix());
+    const x = svgPoint.x;
+    const y = svgPoint.y;
+
+    if (x >= PAD && x <= W - PAD) {
+      const pct = (x - PAD) / (W - 2 * PAD);
+      const idx = Math.min(xMax - 1, Math.max(0, Math.round(pct * (xMax - 1))));
+      setHoverIdx(idx);
+      setHoverPos({ x, y });
+    } else {
+      setHoverIdx(null);
+      setHoverPos(null);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    setHoverIdx(null);
+    setHoverPos(null);
+  };
+
   function setS(i: number, patch: Partial<Series>) {
     setSeries(series.map((s, k) => k === i ? { ...s, ...patch } : s));
   }
@@ -101,8 +132,13 @@ export default function LineChartTool() {
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Panel>
-            <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+        <Panel>
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className="w-full h-auto cursor-crosshair select-none"
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+            >
               <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
               <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="var(--chart-axis)" />
               {valid.map((s, i) => (
@@ -122,6 +158,70 @@ export default function LineChartTool() {
                   </g>
                 ))}
               </g>
+
+              {/* Crosshair & Tooltip Overlay */}
+              {hoverIdx !== null && (
+                <g>
+                  <line
+                    x1={sx(hoverIdx)}
+                    y1={PAD}
+                    x2={sx(hoverIdx)}
+                    y2={H - PAD}
+                    stroke="var(--chart-axis)"
+                    strokeWidth={1}
+                    strokeDasharray="4 4"
+                  />
+                  {valid.map((s, i) => {
+                    const val = s.vals[hoverIdx];
+                    if (val === undefined) return null;
+                    return (
+                      <circle
+                        key={i}
+                        cx={sx(hoverIdx)}
+                        cy={sy(val)}
+                        r={4.5}
+                        fill={COLORS[i % COLORS.length]}
+                        stroke="white"
+                        strokeWidth={1.5}
+                        className="shadow-sm"
+                      />
+                    );
+                  })}
+                  {(() => {
+                    const tooltipW = 140;
+                    const tooltipH = 20 + valid.length * 16;
+                    const tooltipX = sx(hoverIdx) + tooltipW + 10 > W - PAD ? sx(hoverIdx) - tooltipW - 10 : sx(hoverIdx) + 10;
+                    const tooltipY = Math.max(PAD, Math.min(H - PAD - tooltipH, (hoverPos?.y ?? PAD) - tooltipH / 2));
+                    
+                    return (
+                      <g transform={`translate(${tooltipX}, ${tooltipY})`} className="pointer-events-none">
+                        <rect
+                          width={tooltipW}
+                          height={tooltipH}
+                          rx={6}
+                          fill="#1f2937"
+                          fillOpacity={0.92}
+                          stroke="#374151"
+                          strokeWidth={1}
+                        />
+                        <text x={8} y={14} fontSize="9" fontWeight="bold" fill="#f3f4f6">
+                          Index: {hoverIdx}
+                        </text>
+                        {valid.map((s, i) => {
+                          const val = s.vals[hoverIdx];
+                          if (val === undefined) return null;
+                          return (
+                            <text key={i} x={8} y={30 + i * 16} fontSize="10" fill={COLORS[i % COLORS.length]}>
+                              {s.name.slice(0, 10)}: <tspan fontWeight="bold" fill="#ffffff">{val.toFixed(2)}</tspan>
+                            </text>
+                          );
+                        })}
+                      </g>
+                    );
+                  })()}
+                </g>
+              )}
+
               {!valid.length && (
                 <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="12" fill="var(--chart-muted)">
                   {tab === "Workspace" ? "Pick a numeric column →" : "Add a series →"}
@@ -129,16 +229,7 @@ export default function LineChartTool() {
               )}
             </svg>
           </Panel>
-          {interpretation && (
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {interpretation}
-              </p>
-            </div>
-          )}
+          <Interpretation text={interpretation} />
         </div>
         <Panel className="space-y-5">
           {tab === "Workspace" && dataset && (

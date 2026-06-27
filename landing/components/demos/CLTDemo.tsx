@@ -59,7 +59,7 @@ export default function CLTDemo() {
             y={H - PAD - h}
             width={barW - 2}
             height={h}
-            fill="#171717"
+            fill="var(--chart-ink)"
             fillOpacity={0.85}
             rx={1.5}
             style={{ transition: "y 0.15s linear, height 0.15s linear" }}

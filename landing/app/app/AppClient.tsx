@@ -6,30 +6,42 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Menu, X, GraduationCap, Construction, Search, Command, SendHorizonal,
   TrendingUp, Activity, FlaskConical, GitBranch, BarChart3, Layers, Link2,
-  Database,
+  Database, Clock, Star, ChevronRight, ChevronLeft, PlusCircle, Undo2, Redo2
 } from "lucide-react";
 
 import { TOOLS, findTool, type Tool } from "@/lib/tools";
 import LabDashboard, { recordRecentTool } from "@/components/LabDashboard";
 import CommandPalette from "@/components/CommandPalette";
 import ThemeToggle from "@/components/ThemeToggle";
-import { WorkspaceProvider } from "@/components/workspace/WorkspaceProvider";
-import DataStrip from "@/components/workspace/DataStrip";
+import { WorkspaceProvider, useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import StatusBar from "@/components/workspace/StatusBar";
+import DataView from "@/components/workspace/DataView";
+import HistoryView from "@/components/workspace/HistoryView";
+import SavedView from "@/components/workspace/SavedView";
+import { useTabHistory } from "@/components/workspace/useTabHistory";
+
+const GROUP_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  Models: TrendingUp, Distributions: Activity, Inference: FlaskConical,
+  Simulation: GitBranch, Charts: BarChart3, Methods: Layers,
+};
+
+const GROUP_COLORS: Record<string, string> = {
+  Models: "text-blue-500", Distributions: "text-indigo-500", Inference: "text-purple-500",
+  Simulation: "text-emerald-500", Charts: "text-orange-500", Methods: "text-rose-500",
+};
 
 export default function AppClient() {
   const sp = useSearchParams();
   const router = useRouter();
-
   const toolParam = sp.get("tool");
-  const tab = sp.get("tab");
   const tool = (toolParam ? findTool(toolParam) : null) ?? null;
+  const { tabs, closeTab } = useTabHistory(tool?.id ?? null);
 
   useEffect(() => {
     if (tool) recordRecentTool(tool.id);
   }, [tool]);
 
   const [navOpen, setNavOpen] = useState(false);
-
   const groups = useMemo(() => {
     const map = new Map<string, Tool[]>();
     for (const t of TOOLS) {
@@ -44,204 +56,511 @@ export default function AppClient() {
     if (typeof navigator !== "undefined") setIsMac(/mac/i.test(navigator.platform || ""));
   }, []);
 
-  const openPalette = () => {
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: isMac, ctrlKey: !isMac }));
-  };
+  const openPalette = () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: isMac, ctrlKey: !isMac }));
 
   const [copied, setCopied] = useState(false);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyLink = async () => {
     if (typeof window === "undefined") return;
     const url = window.location.href;
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      // Fallback: best-effort, swallow errors so UX still flashes "Copied!"
+    try { await navigator.clipboard.writeText(url); } catch {
       try {
-        const ta = document.createElement("textarea");
-        ta.value = url;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      } catch {
-        /* ignore */
-      }
+        const ta = document.createElement("textarea"); ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+      } catch {}
     }
     setCopied(true);
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
     copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
-  useEffect(() => () => {
-    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-  }, []);
+
+  // Phase 1 + 2 States
+  const [activeSidebarView, setActiveSidebarView] = useState<"tools" | "data" | "history" | "saved">("tools");
+  const [sidebarWidth, setSidebarWidth] = useState(260);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isDraggingSidebar, setIsDraggingSidebar] = useState(false);
+
+  const [sidebarSearch, setSidebarSearch] = useState("");
+  const sidebarSearchRef = useRef<HTMLInputElement>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (g: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g); else next.add(g);
+      return next;
+    });
+  };
+
+  const handleSidebarMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingSidebar(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingSidebar) {
+        let newWidth = e.clientX - 40; // 40 is activity bar width
+        if (newWidth < 180) newWidth = 180;
+        if (newWidth > 400) newWidth = 400;
+        setSidebarWidth(newWidth);
+      }
+    };
+    const handleMouseUp = () => {
+      setIsDraggingSidebar(false);
+    };
+    if (isDraggingSidebar) {
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDraggingSidebar]);
 
   return (
     <WorkspaceProvider>
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors pb-12">
-      <CommandPalette />
+      <div className={`flex flex-col h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 ${isDraggingSidebar ? 'select-none cursor-col-resize' : ''}`}>
+        <CommandPalette />
 
-      <header className="sticky top-0 z-30 bg-white/85 dark:bg-neutral-950/85 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800">
-        <div className="h-14 px-4 md:px-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              className="md:hidden p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              onClick={() => setNavOpen((v) => !v)}
-              aria-label={navOpen ? "Close navigation" : "Open navigation"}
-            >
-              {navOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-            <Link href="/" className="font-medium tracking-tight text-neutral-900 dark:text-neutral-100">
-              Stats Lab
-            </Link>
-            <span className="hidden sm:inline rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase">
-              Lab
-            </span>
-            {tool && (
-              <Link href="/app" className="hidden md:inline ml-2 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 truncate">
-                / {tool.name}
-              </Link>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={openPalette}
-              className="hidden sm:inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 px-3 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 transition-colors"
-              aria-label="Open command palette"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span className="hidden md:inline text-xs">Search</span>
-              <kbd className="ml-1 hidden md:inline-flex items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-1 py-0.5 font-mono text-[10px] text-neutral-500 dark:text-neutral-400">
-                {isMac ? <Command className="w-2.5 h-2.5" /> : "Ctrl"} K
-              </kbd>
-            </button>
-
-            <ThemeToggle compact />
-
-            <div className="relative">
+        <header className="sticky top-0 z-30 bg-white/85 dark:bg-neutral-950/85 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800">
+          <div className="h-14 px-4 md:px-6 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
               <button
-                onClick={copyLink}
-                className="hidden sm:inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 px-3 py-1.5 text-sm transition-colors"
-                aria-label="Copy link to this view"
+                className="md:hidden p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                onClick={() => setNavOpen(v => !v)}
               >
-                <Link2 className="w-4 h-4" />
-                <span className="hidden md:inline">{copied ? "Copied!" : "Copy link"}</span>
+                {navOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
-              {copied && (
-                <span
-                  role="status"
-                  className="md:hidden absolute -bottom-7 right-0 rounded-md bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-2 py-0.5 text-[10px] tracking-wider uppercase"
-                >
-                  Copied!
-                </span>
+              <Link href="/" className="font-medium tracking-tight text-neutral-900 dark:text-neutral-100">
+                Stats Lab
+              </Link>
+              <span className="hidden sm:inline rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase">
+                Lab
+              </span>
+              {tool && (
+                <Link href="/app" className="hidden md:inline ml-2 text-sm text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 truncate">
+                  / {tool.name}
+                </Link>
               )}
             </div>
 
-            <Link
-              href={tool ? `/app?tool=${tool.id}&tab=tutor` : "/app?tab=tutor"}
-              className={`hidden sm:inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors ${
-                tab === "tutor"
-                  ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                  : "border border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              Ask
-            </Link>
-          </div>
-        </div>
-      </header>
+            <div className="flex items-center gap-2">
+              <UndoRedoButtons />
+              <div className="w-px h-4 bg-neutral-200 dark:bg-neutral-700 hidden sm:block" />
+              <button
+                onClick={openPalette}
+                className="hidden sm:inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800 px-3 py-1.5 text-sm text-neutral-500 dark:text-neutral-400 transition-colors"
+                aria-label="Open command palette"
+              >
+                <Search className="w-3.5 h-3.5" />
+                <span className="hidden md:inline text-xs">Search</span>
+                <kbd className="ml-1 hidden md:inline-flex items-center gap-0.5 rounded border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 px-1 py-0.5 font-mono text-[10px] text-neutral-500 dark:text-neutral-400">
+                  {isMac ? <Command className="w-2.5 h-2.5" /> : "Ctrl"} K
+                </kbd>
+              </button>
 
-      <div className="grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)]">
-        <aside
-          className={`md:sticky md:top-14 md:h-[calc(100vh-3.5rem)] md:border-r md:border-neutral-200 md:dark:border-neutral-800 md:bg-white md:dark:bg-neutral-950 md:overflow-y-auto ${
-            navOpen ? "block bg-white dark:bg-neutral-950" : "hidden md:block"
-          }`}
-        >
-          <nav className="p-4 space-y-1">
-            <Link
-              href="/app"
-              onClick={() => setNavOpen(false)}
-              className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                !toolParam
-                  ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                  : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              }`}
-            >
-              <Database className="w-3.5 h-3.5" />
-              Data
-            </Link>
-            {groups.map(([group, ts], gi) => {
-              const SIDEBAR_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-                Models: TrendingUp, Distributions: Activity, Inference: FlaskConical,
-                Simulation: GitBranch, Charts: BarChart3, Methods: Layers,
-              };
-              const Icon = SIDEBAR_ICONS[group] || Layers;
+              <ThemeToggle compact />
+
+              <div className="relative">
+                <button
+                  onClick={copyLink}
+                  className="hidden sm:inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 px-3 py-1.5 text-sm transition-colors"
+                  aria-label="Copy link to this view"
+                >
+                  <Link2 className="w-4 h-4" />
+                  <span className="hidden md:inline">{copied ? "Copied!" : "Copy link"}</span>
+                </button>
+                {copied && (
+                  <span
+                    role="status"
+                    className="md:hidden absolute -bottom-7 right-0 rounded-md bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-2 py-0.5 text-[10px] tracking-wider uppercase"
+                  >
+                    Copied!
+                  </span>
+                )}
+              </div>
+
+              <Link
+                href={tool ? `/app?tool=${tool.id}&tab=tutor` : "/app?tab=tutor"}
+                className={`hidden sm:inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors ${
+                  sp.get("tab") === "tutor"
+                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+                    : "border border-neutral-200 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                }`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                Ask
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        {/* Browser-like Tab Bar */}
+        {tabs.length > 0 && (
+          <div className="shrink-0 h-11 bg-neutral-50 dark:bg-neutral-900/40 border-b border-neutral-200 dark:border-neutral-800 flex items-center px-4 overflow-x-auto scrollbar-none gap-1 select-none">
+            {tabs.map((t) => {
+              const Icon = GROUP_ICONS[t.group] || Layers;
               return (
-                <div key={group}>
-                  {gi > 0 && <div className="my-2 border-t border-neutral-100 dark:border-neutral-800/60" />}
-                  <div className="flex items-center gap-2 px-2 mb-1 mt-3">
-                    <Icon className="w-3 h-3 text-neutral-400 dark:text-neutral-500" />
-                    <span className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500">
-                      {group}
-                    </span>
-                  </div>
-                  <ul className="space-y-0.5">
-                    {ts.map((t) => {
-                      const active = t.id === toolParam;
-                      return (
-                        <li key={t.id}>
-                          <Link
-                            href={`/app?tool=${t.id}`}
-                            onClick={() => setNavOpen(false)}
-                            className={`flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                              active
-                                ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                                : "text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                            }`}
-                          >
-                            <span className="truncate">{t.name}</span>
-                            {!t.built && (
-                              <span className={`text-[9px] uppercase tracking-wider ${active ? "text-neutral-300 dark:text-neutral-500" : "text-neutral-400"}`}>
-                                Soon
-                              </span>
-                            )}
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                <div
+                  key={t.id}
+                  onClick={() => router.push(t.built ? `/app?tool=${t.id}` : "#")}
+                  className={`group h-8 flex items-center gap-2 px-3 rounded-lg text-xs font-medium cursor-pointer transition-all duration-150 ${
+                    t.isActive
+                      ? "bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-900 dark:text-neutral-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                      : "bg-transparent border border-transparent text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100/50 dark:hover:bg-neutral-800/30"
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${GROUP_COLORS[t.group] || "text-neutral-450"}`} />
+                  <span className="truncate max-w-[120px]">{t.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeTab(t.id);
+                      if (t.isActive) {
+                        const remaining = tabs.filter(x => x.id !== t.id);
+                        if (remaining.length > 0) {
+                          router.push(`/app?tool=${remaining[remaining.length - 1].id}`);
+                        } else {
+                          router.push("/app");
+                        }
+                      }
+                    }}
+                    className="p-0.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ml-1"
+                    title="Close tab"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
               );
             })}
-          </nav>
-        </aside>
+            <button
+              onClick={() => router.push("/app")}
+              className="p-1 rounded-lg text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors ml-1"
+              title="Open dashboard"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
-        <main className="px-4 md:px-8 py-6 md:py-10 max-w-6xl">
-          {!toolParam ? (
-            <LabDashboard />
-          ) : tool ? (
-            <ToolCanvas tool={tool} />
-          ) : (
-            <NotFound id={toolParam} />
-          )}
-        </main>
+        <div className="flex-1 flex min-h-0 overflow-hidden relative">
+          
+          {/* Phase 1: Activity Bar + Sidebar */}
+          <aside
+            className={`relative flex shrink-0 h-full border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 z-20 ${
+              isDraggingSidebar ? "" : "transition-all duration-300"
+            } ${navOpen ? "absolute inset-0 w-full" : "hidden md:flex"}`}
+            style={{ width: typeof window !== "undefined" && window.innerWidth >= 768 ? (sidebarCollapsed ? 48 : sidebarWidth + 48) : undefined }}
+          >
+            {/* Activity Bar */}
+            <div className="w-12 shrink-0 border-r border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/50 flex flex-col items-center py-3 gap-2">
+              {[
+                { id: "tools" as const, icon: Layers, label: "Tools" },
+                { id: "data" as const, icon: Database, label: "Data Workspace" },
+                { id: "history" as const, icon: Clock, label: "Action Log" },
+                { id: "saved" as const, icon: Star, label: "Bookmarks" },
+              ].map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveSidebarView(item.id);
+                    if (sidebarCollapsed) setSidebarCollapsed(false);
+                  }}
+                  className={`relative p-2 rounded-xl transition-colors ${
+                    activeSidebarView === item.id && !sidebarCollapsed
+                      ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40"
+                      : "text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 dark:hover:text-neutral-200 dark:hover:bg-neutral-800"
+                  }`}
+                  title={item.label}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {activeSidebarView === item.id && !sidebarCollapsed && (
+                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 rounded-r bg-indigo-600" />
+                  )}
+                </button>
+              ))}
+              <div className="flex-1" />
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-2 rounded-xl text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+              </button>
+            </div>
+
+            {/* Sidebar Content */}
+            {!sidebarCollapsed && (
+              <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-neutral-950">
+                <div className="h-10 shrink-0 px-4 flex items-center border-b border-neutral-100 dark:border-neutral-800/60">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
+                    {activeSidebarView === "tools" && "Tools"}
+                    {activeSidebarView === "data" && "Data Workspace"}
+                    {activeSidebarView === "history" && "Action Log"}
+                    {activeSidebarView === "saved" && "Bookmarks & Snapshots"}
+                  </span>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-4">
+                  {activeSidebarView === "tools" && (
+                    <>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-neutral-400" />
+                        <input
+                          ref={sidebarSearchRef}
+                          value={sidebarSearch}
+                          onChange={e => setSidebarSearch(e.target.value)}
+                          placeholder="Filter tools..."
+                          className="w-full pl-8 pr-3 py-1.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        {groups.map(([group, ts]) => {
+                          const Icon = GROUP_ICONS[group] || Layers;
+                          const isCollapsed = collapsedGroups.has(group);
+                          const matches = sidebarSearch
+                            ? ts.filter(t => t.name.toLowerCase().includes(sidebarSearch.toLowerCase()) || group.toLowerCase().includes(sidebarSearch.toLowerCase()))
+                            : ts;
+                            
+                          if (matches.length === 0) return null;
+
+                          return (
+                            <div key={group}>
+                              <button
+                                onClick={() => toggleGroup(group)}
+                                className="w-full flex items-center justify-between p-1.5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 rounded-lg transition-colors group/gb"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Icon className={`w-3.5 h-3.5 ${GROUP_COLORS[group]}`} />
+                                  <span className="text-xs font-semibold">{group}</span>
+                                </div>
+                                <ChevronDown className={`w-3 h-3 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} />
+                              </button>
+                              {!isCollapsed && (
+                                <ul className="mt-1 space-y-0.5 ml-1 border-l border-neutral-100 dark:border-neutral-800/60 pl-2">
+                                  {matches.map(t => (
+                                    <li key={t.id}>
+                                      <Link
+                                        href={t.built ? `/app?tool=${t.id}` : "#"}
+                                        onClick={() => setNavOpen(false)}
+                                        className={`flex items-center justify-between p-1.5 rounded-lg text-sm transition-colors ${
+                                          t.id === toolParam
+                                            ? "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 font-medium"
+                                            : t.built
+                                            ? "text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                            : "text-neutral-400 opacity-60"
+                                        }`}
+                                      >
+                                        <span className="truncate">{t.name}</span>
+                                        {!t.built && <span className="text-[9px] uppercase tracking-wider">Soon</span>}
+                                      </Link>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                  {activeSidebarView === "data" && (
+                    <DataView />
+                  )}
+                  {activeSidebarView === "history" && (
+                    <HistoryView />
+                  )}
+                  {activeSidebarView === "saved" && (
+                    <SavedView currentToolId={toolParam} />
+                  )}
+                </div>
+              </div>
+            )}
+            {!sidebarCollapsed && (
+              <div
+                onMouseDown={handleSidebarMouseDown}
+                className="absolute right-0 top-0 bottom-0 w-2 -translate-x-px cursor-col-resize hover:bg-indigo-500/40 active:bg-indigo-500/70 transition-colors"
+              />
+            )}
+          </aside>
+
+          {/* Center Canvas */}
+          <main className="flex-1 flex flex-col min-w-0 bg-neutral-50/50 dark:bg-neutral-950/50 relative">
+            <div className="flex-1 overflow-y-auto scrollbar-thin p-6 md:p-8">
+              <div className="max-w-[1600px] w-full mx-auto">
+                {!toolParam ? (
+                  <LabDashboard />
+                ) : tool ? (
+                  <ToolCanvas tool={tool} />
+                ) : (
+                  <NotFound id={toolParam} />
+                )}
+              </div>
+            </div>
+          </main>
+
+        </div>
+        <StatusBar tool={tool} />
       </div>
 
-      {tab === "tutor" && (
+      {sp.get("tab") === "tutor" && (
         <TutorPanel
           tool={tool}
           onClose={() => router.push(tool ? `/app?tool=${tool.id}` : "/app")}
         />
       )}
-
-      <DataStrip />
-    </div>
     </WorkspaceProvider>
   );
+}
+
+type ChatMsg = { role: "user" | "assistant"; content: string };
+
+function TutorPanel({ tool, onClose }: { tool: Tool | null; onClose: () => void }) {
+  const greeting = tool
+    ? `What would you like to know about ${tool.name}?`
+    : "Pick a tool from the sidebar and ask me anything about it.";
+
+  const [messages, setMessages] = useState<ChatMsg[]>([{ role: "assistant", content: greeting }]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMessages((prev) => (prev.length <= 1 ? [{ role: "assistant", content: greeting }] : prev));
+  }, [tool?.id]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, loading]);
+
+  async function send(content: string) {
+    if (!content.trim() || loading) return;
+    const next: ChatMsg[] = [...messages, { role: "user", content: content.trim() }];
+    setMessages(next);
+    setInput("");
+    setLoading(true);
+    setErr(null);
+
+    try {
+      const r = await fetch("/api/tutor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: next.filter((m) => m.role !== "assistant" || next.indexOf(m) > 0),
+          context: tool ? { tool: tool.name, group: tool.group, blurb: tool.blurb } : null,
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply ?? "(empty)" }]);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "request failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-white dark:bg-neutral-950 border-l border-neutral-200 dark:border-neutral-800 shadow-2xl flex flex-col">
+      <div className="px-5 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <GraduationCap className="w-4 h-4 text-neutral-500 shrink-0" />
+          <span className="text-xs uppercase tracking-wider text-neutral-500 truncate">
+            {tool ? `Ask about ${tool.name}` : "Ask a question"}
+          </span>
+        </div>
+        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-3">
+        {messages.map((m, i) => (
+          <Bubble key={i} who={m.role === "user" ? "user" : "bot"}>{m.content}</Bubble>
+        ))}
+        {loading && (
+          <div className="flex justify-start">
+            <div className="bg-neutral-100 dark:bg-neutral-800 rounded-2xl rounded-bl-sm px-4 py-3">
+              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 inline-block mr-1" />
+              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 inline-block mr-1" />
+              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 inline-block" />
+            </div>
+          </div>
+        )}
+        {err && <div className="text-xs text-red-500">{err}</div>}
+      </div>
+
+      <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="p-4 border-t border-neutral-200 dark:border-neutral-800">
+        <div className="flex gap-2">
+          <input
+            type="text" value={input} onChange={(e) => setInput(e.target.value)} disabled={loading}
+            placeholder="Ask a question…"
+            className="flex-1 rounded-full border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-2.5 text-sm"
+          />
+          <button type="submit" disabled={!input.trim() || loading} className="w-10 h-10 flex items-center justify-center rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900">
+            <SendHorizonal className="w-4 h-4" />
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Bubble({ who, children }: { who: "user" | "bot"; children: React.ReactNode }) {
+  return (
+    <div className={`flex ${who === "user" ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${who === "user" ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-br-sm" : "bg-neutral-100 dark:bg-neutral-800 rounded-bl-sm"}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function UndoRedoButtons() {
+  const { undo, redo, canUndo, canRedo } = useWorkspace();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (e.key === "y" || (e.key === "z" && e.shiftKey)) { e.preventDefault(); redo(); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undo, redo]);
+
+  return (
+    <div className="hidden sm:flex items-center gap-0.5">
+      <button
+        onClick={undo}
+        disabled={!canUndo}
+        title="Undo (⌘Z)"
+        className="p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:bg-neutral-100 dark:enabled:hover:bg-neutral-800 text-neutral-500 dark:text-neutral-400"
+      >
+        <Undo2 className="w-3.5 h-3.5" />
+      </button>
+      <button
+        onClick={redo}
+        disabled={!canRedo}
+        title="Redo (⌘Y)"
+        className="p-1.5 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:bg-neutral-100 dark:enabled:hover:bg-neutral-800 text-neutral-500 dark:text-neutral-400"
+      >
+        <Redo2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function ChevronDown({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m6 9 6 6 6-6"/>
+    </svg>
+  )
 }
 
 function ToolCanvas({ tool }: { tool: Tool }) {
@@ -250,7 +569,7 @@ function ToolCanvas({ tool }: { tool: Tool }) {
   return (
     <div className="space-y-6">
       <header>
-        <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400">{tool.group}</div>
+        <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 font-bold">{tool.group}</div>
         <h1 className="font-medium tracking-tight text-3xl mt-1 text-neutral-900 dark:text-neutral-100">{tool.name}</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400 max-w-2xl">{tool.blurb}</p>
       </header>
@@ -268,7 +587,7 @@ function ComingSoon({ tool }: { tool: Tool }) {
         <h1 className="font-medium tracking-tight text-3xl mt-1 text-neutral-900 dark:text-neutral-100">{tool.name}</h1>
         <p className="mt-2 text-neutral-600 dark:text-neutral-400 max-w-2xl">{tool.blurb}</p>
       </header>
-      <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-10 text-center">
+      <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-10 text-center shadow-sm">
         <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-neutral-100 dark:bg-neutral-800 mb-4">
           <Construction className="w-5 h-5 text-neutral-500" />
         </div>
@@ -294,142 +613,12 @@ function ComingSoon({ tool }: { tool: Tool }) {
 
 function NotFound({ id }: { id: string }) {
   return (
-    <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-10 text-center">
+    <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-10 text-center shadow-sm">
       <h2 className="font-medium text-xl">Unknown tool</h2>
       <p className="mt-2 text-neutral-600 dark:text-neutral-400">No tool registered for <code>{id}</code>.</p>
-      <Link href="/app" className="mt-4 inline-flex rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-4 py-2 text-sm">
+      <Link href="/app" className="mt-4 inline-flex rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-4 py-2 text-sm shadow-sm">
         Back to dashboard
       </Link>
-    </div>
-  );
-}
-
-type ChatMsg = { role: "user" | "assistant"; content: string };
-
-function TutorPanel({ tool, onClose }: { tool: Tool | null; onClose: () => void }) {
-  const greeting = tool
-    ? `What would you like to know about ${tool.name}?`
-    : "Pick a tool from the sidebar and ask me anything about it.";
-
-  const [messages, setMessages] = useState<ChatMsg[]>([{ role: "assistant", content: greeting }]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Refresh greeting when tool changes (only if no real conversation has started yet).
-  useEffect(() => {
-    setMessages((prev) => (prev.length <= 1 ? [{ role: "assistant", content: greeting }] : prev));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tool?.id]);
-
-  // Auto-scroll on new content.
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, loading]);
-
-  async function send(content: string) {
-    if (!content.trim() || loading) return;
-    const next: ChatMsg[] = [...messages, { role: "user", content: content.trim() }];
-    setMessages(next);
-    setInput("");
-    setLoading(true);
-    setErr(null);
-
-    try {
-      const r = await fetch("/api/tutor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: next.filter((m) => m.role !== "assistant" || next.indexOf(m) > 0), // drop initial greeting from history
-          context: tool ? { tool: tool.name, group: tool.group, blurb: tool.blurb } : null,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? `HTTP ${r.status}`);
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply ?? "(empty)" }]);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "request failed";
-      setErr(msg);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-white dark:bg-neutral-950 border-l border-neutral-200 dark:border-neutral-800 shadow-2xl shadow-black/5 dark:shadow-black/30 flex flex-col">
-      <div className="px-5 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
-          <GraduationCap className="w-4 h-4 text-neutral-500 dark:text-neutral-400 shrink-0" />
-          <span className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-400 truncate">
-            {tool ? `Ask about ${tool.name}` : "Ask a question"}
-          </span>
-        </div>
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800" aria-label="Close tutor">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-3">
-        {messages.map((m, i) => (
-          <Bubble key={i} who={m.role === "user" ? "user" : "bot"}>{m.content}</Bubble>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-neutral-100 dark:bg-neutral-800 rounded-2xl rounded-bl-sm px-4 py-3 inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.3s]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 animate-bounce [animation-delay:-0.15s]" />
-              <span className="h-1.5 w-1.5 rounded-full bg-neutral-400 animate-bounce" />
-            </div>
-          </div>
-        )}
-        {err && (
-          <div className="text-xs rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 px-3 py-2">
-            {err}
-          </div>
-        )}
-      </div>
-
-      <form
-        onSubmit={(e) => { e.preventDefault(); send(input); }}
-        className="p-4 border-t border-neutral-200 dark:border-neutral-800"
-      >
-        <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question…"
-            disabled={loading}
-            className="flex-1 rounded-full border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-2.5 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-500 disabled:opacity-60"
-            aria-label="Tutor input"
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || loading}
-            className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 disabled:opacity-30 hover:opacity-90 transition-opacity"
-            aria-label="Send"
-          >
-            <SendHorizonal className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="mt-2 text-[10px] text-neutral-400 uppercase tracking-wider">For learning, not graded work</p>
-      </form>
-    </div>
-  );
-}
-
-function Bubble({ who, children }: { who: "user" | "bot"; children: React.ReactNode }) {
-  return (
-    <div className={`flex ${who === "user" ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-        who === "user"
-          ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-br-sm"
-          : "bg-neutral-100 dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 rounded-bl-sm"
-      }`}>
-        {children}
-      </div>
     </div>
   );
 }

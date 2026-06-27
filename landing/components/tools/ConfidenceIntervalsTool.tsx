@@ -6,7 +6,8 @@ import {
 } from "./shared/stats";
 import {
   Tabs, Field, Stat, NumberInput, DataTextArea, Select, SampleDataButton,
-  Panel, Btn, Formula,
+  Panel, Btn, Formula, Interpretation,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -15,6 +16,7 @@ const SAMPLE = "9.1, 10.3, 8.8, 11.2, 10.5, 9.8, 10.1, 9.5, 10.0, 11.1, 9.9";
 
 export default function ConfidenceIntervalsTool() {
   const [tab, setTab] = useState("Your Data");
+  useRegisterToolState("confidence-intervals", { tab }, { tab: setTab });
   return (
     <div className="space-y-6">
       <Tabs tabs={["Your Data", "Summary Stats", "Coverage Simulation"]} active={tab} onChange={setTab} />
@@ -76,7 +78,7 @@ function YourData() {
     : null;
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2">
+        <div className="lg:col-span-2">
         <Panel>
           {ci ? (
             <>
@@ -90,16 +92,7 @@ function YourData() {
             <div className="text-sm text-neutral-500 text-center py-12">Paste at least two values to compute a CI.</div>
           )}
         </Panel>
-        {interpretation && (
-          <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-            <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-              Interpretation
-            </div>
-            <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-              {interpretation}
-            </p>
-          </div>
-        )}
+        <Interpretation text={interpretation} />
       </div>
       <Panel className="space-y-5">
         {dataset && (
@@ -159,19 +152,12 @@ function SummaryStats() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2">
+        <div className="lg:col-span-2">
         <Panel>
           <CIBar ci={{ lower, upper, center: xbar }}
                  label={`${(conf * 100).toFixed(0)}% ${sigmaKnown ? "Z" : "T"}-interval`} />
         </Panel>
-        <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-          <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-            Interpretation
-          </div>
-          <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-            {interpretation}
-          </p>
-        </div>
+        <Interpretation text={interpretation} />
       </div>
       <Panel className="space-y-5">
         <NumberInput label="Sample mean x̄" value={xbar} onChange={setXbar} step={0.1} />
@@ -231,7 +217,7 @@ function Coverage() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2">
+        <div className="lg:col-span-2">
         <Panel>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
             <line x1={sx(trueMu)} y1={PAD} x2={sx(trueMu)} y2={H - PAD} stroke="#fb923c" strokeWidth={1.5} strokeDasharray="4 4" />
@@ -244,14 +230,7 @@ function Coverage() {
             ))}
           </svg>
         </Panel>
-        <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-          <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-            Interpretation
-          </div>
-          <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-            {interpretation}
-          </p>
-        </div>
+        <Interpretation text={interpretation} />
       </div>
       <Panel className="space-y-5">
         <Stat label="Empirical coverage" value={`${covered}/${k} = ${((covered / k) * 100).toFixed(1)}%`} />

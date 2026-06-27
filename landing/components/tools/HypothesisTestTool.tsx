@@ -1,5 +1,4 @@
 "use client";
-
 import { useMemo, useState } from "react";
 import {
   zTest, tTest, welchTest, pairedTTest, chi2GoF,
@@ -7,7 +6,7 @@ import {
 } from "./shared/stats";
 import {
   Tabs, Stat, NumberInput, DataTextArea, Select, SampleDataButton,
-  Panel, Btn, Verdict, StepByStep, Formula,
+  Panel, Btn, Verdict, StepByStep, Formula, Interpretation, useTutorInput, useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -34,19 +33,6 @@ function effectSizeLabel(d: number): string {
   return "large";
 }
 
-function Interpretation({ text }: { text: string }) {
-  return (
-    <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-      <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-        Interpretation
-      </div>
-      <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-        {text}
-      </p>
-    </div>
-  );
-}
-
 function htInterpretation(r: { pValue: number; reject: boolean; effectSize?: number }, alpha: number): string {
   const d = r.effectSize ?? 0;
   const verdict = r.reject ? "Reject H₀" : "Fail to reject H₀";
@@ -54,7 +40,7 @@ function htInterpretation(r: { pValue: number; reject: boolean; effectSize?: num
   return `${verdict} at α=${alpha} — p=${pStr}. Effect size d=${d.toFixed(3)} (${effectSizeLabel(d)}; thresholds <0.2 / 0.2–0.5 / 0.5–0.8 / >0.8).`;
 }
 
-function zRegionChart({ stat, alpha, tail, df }: { stat: number; alpha: number; tail: Tail; df: number | null }) {
+function zRegionChart({ stat, critValue, tail, df }: { stat: number; critValue: number; tail: Tail; df: number | null }) {
   const xs = Array.from({ length: 240 }, (_, i) => -4 + (8 * i) / 239);
   const pdf = (x: number) => df ? Math.exp(-0.5 * x * x) * 1 : normalPDF(x); // visual normal
   const ys = xs.map(pdf);
@@ -62,13 +48,8 @@ function zRegionChart({ stat, alpha, tail, df }: { stat: number; alpha: number; 
   const px = (x: number) => PAD + ((x + 4) / 8) * (W - 2 * PAD);
   const py = (y: number) => H - PAD - (y / ymax) * (H - 2 * PAD);
   const path = xs.map((x, i) => `${i === 0 ? "M" : "L"}${px(x).toFixed(2)},${py(ys[i]).toFixed(2)}`).join(" ");
-  const cv = df === null ? -1 / 0 : 0; // not used directly
-  // for visualization we just shade by tail and stat-comparison
-  // crit-by-area approximation
-  const critGuess = tail === "two" ? (alpha === 0.01 ? 2.576 : alpha === 0.05 ? 1.96 : 1.645)
-                                   : (alpha === 0.01 ? 2.326 : alpha === 0.05 ? 1.645 : 1.282);
   function shade(side: "left" | "right") {
-    const c = side === "right" ? critGuess : -critGuess;
+    const c = side === "right" ? critValue : -critValue;
     const filtered = side === "right" ? xs.filter((x) => x >= c) : xs.filter((x) => x <= c);
     const lys = filtered.map(pdf);
     let d = `M${px(side === "right" ? c : filtered[0])},${H - PAD}`;
@@ -79,18 +60,19 @@ function zRegionChart({ stat, alpha, tail, df }: { stat: number; alpha: number; 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
       {(tail === "two" || tail === "right") && <path d={shade("right")} fill="#dc2626" fillOpacity={0.12} />}
-      {(tail === "two" || tail === "left")  && <path d={shade("left")}  fill="#dc2626" fillOpacity={0.12} />}
+      {(tail === "two" || tail === "left") && <path d={shade("left")} fill="#dc2626" fillOpacity={0.12} />}
       <path d={path} fill="none" stroke="var(--chart-ink)" strokeWidth={2} />
       <line x1={px(stat)} y1={H - PAD} x2={px(stat)} y2={py(pdf(Math.max(-3.99, Math.min(3.99, stat))))}
-            stroke="#fb923c" strokeWidth={2} />
+        stroke="#fb923c" strokeWidth={2} />
       <circle cx={px(Math.max(-3.99, Math.min(3.99, stat)))} cy={py(pdf(Math.max(-3.99, Math.min(3.99, stat))))}
-              r={5} fill="#fb923c" stroke="#fff" strokeWidth={2} />
+        r={5} fill="#fb923c" stroke="#fff" strokeWidth={2} />
     </svg>
   );
 }
 
 export default function HypothesisTestTool() {
   const [tab, setTab] = useState("One-Sample Z");
+  useRegisterToolState("hypothesis-test", { tab }, { tab: setTab });
   return (
     <div className="space-y-6">
       <Tabs tabs={["One-Sample Z", "One-Sample T", "Two-Sample T", "Paired T", "Chi-Square"]} active={tab} onChange={setTab} />
@@ -105,36 +87,55 @@ export default function HypothesisTestTool() {
 
 function OneZ() {
   const [xbar, setXbar] = useState(102);
-  const [mu0, setMu0]   = useState(100);
+  const [mu0, setMu0] = useState(100);
   const [sigma, setSig] = useState(10);
-  const [n, setN]       = useState(30);
-  const [alpha, setA]   = useState(0.05);
+  const [n, setN] = useState(30);
+  const [alpha, setA] = useState(0.05);
   const [tail, setTail] = useState<Tail>("two");
+
+  useTutorInput({
+    xbar: setXbar,
+    mu0: setMu0,
+    sigma: setSig,
+    n: setN,
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val); },
+  });
+
+  useRegisterToolState("hypothesis-test", { xbar, mu0, sigma, n, alpha, tail }, {
+    xbar: setXbar,
+    mu0: setMu0,
+    sigma: setSig,
+    n: setN,
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val as Tail); },
+  });
+
   const r = zTest(xbar, mu0, sigma, n, alpha, tail);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-4">
-        <Panel>{zRegionChart({ stat: r.testStat, alpha, tail, df: null })}</Panel>
+        <Panel>{zRegionChart({ stat: r.testStat, critValue: r.critValue, tail, df: null })}</Panel>
         <Panel><Verdict reject={r.reject} pValue={r.pValue} alpha={alpha} /></Panel>
         <Interpretation text={htInterpretation(r, alpha)} />
       </div>
       <Panel className="space-y-5">
         <NumberInput label="Sample mean x̄" value={xbar} onChange={setXbar} step={0.1} />
-        <NumberInput label="Null mean μ₀"   value={mu0}  onChange={setMu0}  step={0.1} />
-        <NumberInput label="σ (known)"      value={sigma} onChange={setSig} step={0.1} min={0.001} />
-        <NumberInput label="Sample size n"  value={n}    onChange={(v) => setN(Math.max(2, Math.round(v)))} min={2} />
+        <NumberInput label="Null mean μ₀" value={mu0} onChange={setMu0} step={0.1} />
+        <NumberInput label="σ (known)" value={sigma} onChange={setSig} step={0.1} min={0.001} />
+        <NumberInput label="Sample size n" value={n} onChange={(v) => setN(Math.max(2, Math.round(v)))} min={2} />
         <Select label="α" value={String(alpha)} onChange={(v) => setA(Number(v))} options={ALPHA_OPTS} />
         <Select label="Alternative" value={tail} onChange={(v) => setTail(v as Tail)} options={TAIL_OPTS} />
         <Stat label="Z statistic" value={r.testStat.toFixed(4)} />
-        <Stat label="p-value"     value={r.pValue.toFixed(4)} />
+        <Stat label="p-value" value={r.pValue.toFixed(4)} />
         <Stat label="Critical |z*|" value={r.critValue.toFixed(4)} />
-        <Stat label="Cohen's d"   value={(r.effectSize ?? 0).toFixed(4)} />
+        <Stat label="Cohen's d" value={(r.effectSize ?? 0).toFixed(4)} />
         <Formula text="z = (x̄ − μ₀) / (σ / √n)" />
         <StepByStep steps={[
           { label: "SE = σ/√n", value: (sigma / Math.sqrt(n)).toFixed(4) },
-          { label: "x̄ − μ₀",     value: (xbar - mu0).toFixed(4) },
-          { label: "z",          value: r.testStat.toFixed(4) },
-          { label: "p-value",    value: r.pValue.toFixed(4) },
+          { label: "x̄ − μ₀", value: (xbar - mu0).toFixed(4) },
+          { label: "z", value: r.testStat.toFixed(4) },
+          { label: "p-value", value: r.pValue.toFixed(4) },
         ]} />
       </Panel>
     </div>
@@ -150,6 +151,22 @@ function OneT() {
   const [tail, setTail] = useState<Tail>("two");
   const [valueCol, setValueCol] = useState<string | null>(null);
   const [useWs, setUseWs] = useState(!!dataset);
+
+  useTutorInput({
+    mu0: setMu0,
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val); },
+  });
+
+  useRegisterToolState("hypothesis-test", { raw, mu0, alpha, tail, valueCol, useWs }, {
+    raw: setRaw,
+    mu0: setMu0,
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val as Tail); },
+    valueCol: setValueCol,
+    useWs: setUseWs,
+  });
+
   const wsData = useMemo(() => {
     if (!dataset || !valueCol) return null;
     const c = dataset.columns.find((c) => c.name === valueCol);
@@ -162,7 +179,7 @@ function OneT() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-4">
         <Panel>
-          {r ? zRegionChart({ stat: r.testStat, alpha, tail, df: r.df ?? null }) : <Empty msg="Paste at least 2 values." />}
+          {r ? zRegionChart({ stat: r.testStat, critValue: r.critValue, tail, df: r.df ?? null }) : <Empty msg="Paste at least 2 values." />}
         </Panel>
         {r && <Panel><Verdict reject={r.reject} pValue={r.pValue} alpha={alpha} /></Panel>}
         {r && <Interpretation text={htInterpretation(r, alpha)} />}
@@ -213,6 +230,21 @@ function TwoT() {
   const [groupCol, setGroupCol] = useState<string | null>(null);
   const [useWs, setUseWs] = useState(!!dataset);
 
+  useTutorInput({
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val); },
+  });
+
+  useRegisterToolState("hypothesis-test", { r1, r2, alpha, tail, valueCol, groupCol, useWs }, {
+    r1: setR1,
+    r2: setR2,
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val as Tail); },
+    valueCol: setValueCol,
+    groupCol: setGroupCol,
+    useWs: setUseWs,
+  });
+
   const ws = useMemo(() => {
     if (!dataset || !valueCol || !groupCol) return null;
     const v = dataset.columns.find((c) => c.name === valueCol);
@@ -239,7 +271,7 @@ function TwoT() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-4">
-        <Panel>{r ? zRegionChart({ stat: r.testStat, alpha, tail, df: r.df ?? null }) : <Empty msg="Paste data in both groups." />}</Panel>
+        <Panel>{r ? zRegionChart({ stat: r.testStat, critValue: r.critValue, tail, df: r.df ?? null }) : <Empty msg="Paste data in both groups." />}</Panel>
         {r && <Panel><Verdict reject={r.reject} pValue={r.pValue} alpha={alpha} /></Panel>}
         {r && <Interpretation text={htInterpretation(r, alpha)} />}
       </div>
@@ -274,7 +306,7 @@ function TwoT() {
         {r && (
           <>
             <Stat label="t (Welch)" value={r.testStat.toFixed(4)} sub={`df = ${(r.df ?? 0).toFixed(2)}`} />
-            <Stat label="p"         value={r.pValue.toFixed(4)} />
+            <Stat label="p" value={r.pValue.toFixed(4)} />
             <Stat label="Cohen's d" value={(r.effectSize ?? 0).toFixed(4)} />
           </>
         )}
@@ -291,6 +323,18 @@ function Paired() {
   const [r2, setR2] = useState(B);
   const [alpha, setA] = useState(0.05);
   const [tail, setTail] = useState<Tail>("two");
+
+  useTutorInput({
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val); },
+  });
+
+  useRegisterToolState("hypothesis-test", { r1, r2, alpha, tail }, {
+    r1: setR1,
+    r2: setR2,
+    alpha: setA,
+    tail: (val) => { if (["two", "left", "right"].includes(val)) setTail(val as Tail); },
+  });
   const d1 = useMemo(() => parseNumbers(r1), [r1]);
   const d2 = useMemo(() => parseNumbers(r2), [r2]);
   const aligned = d1 && d2 && d1.length === d2.length && d1.length >= 2;
@@ -298,13 +342,13 @@ function Paired() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-4">
-        <Panel>{r ? zRegionChart({ stat: r.testStat, alpha, tail, df: r.df ?? null }) : <Empty msg="Two equal-length samples required." />}</Panel>
+        <Panel>{r ? zRegionChart({ stat: r.testStat, critValue: r.critValue, tail, df: r.df ?? null }) : <Empty msg="Two equal-length samples required." />}</Panel>
         {r && <Panel><Verdict reject={r.reject} pValue={r.pValue} alpha={alpha} /></Panel>}
         {r && <Interpretation text={htInterpretation(r, alpha)} />}
       </div>
       <Panel className="space-y-5">
         <DataTextArea label="Before" value={r1} onChange={setR1} rows={3} />
-        <DataTextArea label="After"  value={r2} onChange={setR2} rows={3} />
+        <DataTextArea label="After" value={r2} onChange={setR2} rows={3} />
         <SampleDataButton onClick={() => { setR1(A); setR2(B); }} />
         <Select label="α" value={String(alpha)} onChange={(v) => setA(Number(v))} options={ALPHA_OPTS} />
         <Select label="Alternative" value={tail} onChange={(v) => setTail(v as Tail)} options={TAIL_OPTS} />
@@ -325,6 +369,20 @@ function ChiSq() {
   const [obs, setObs] = useState<number[]>([22, 18, 30, 14, 16]);
   const [exp, setExp] = useState<number[]>([20, 20, 20, 20, 20]);
   const [alpha, setA] = useState(0.05);
+
+  useTutorInput({
+    alpha: setA,
+    reset: () => {
+      const t = obs.reduce((s, v) => s + v, 0);
+      setExp(obs.map(() => t / obs.length));
+    },
+  });
+
+  useRegisterToolState("hypothesis-test", { obs, exp, alpha }, {
+    obs: (v) => setObs(Array.isArray(v) ? v : []),
+    exp: (v) => setExp(Array.isArray(v) ? v : []),
+    alpha: setA,
+  });
 
   const r = obs.length === exp.length && obs.length >= 2 ? chi2GoF(obs, exp, alpha) : null;
 

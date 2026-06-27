@@ -25,13 +25,29 @@ export function gauss(rng: () => number, mu = 0, sigma = 1) {
 }
 
 // ─── Descriptive Stats ──────────────────────────────────────────────────────
+/** High-precision Kahan Summation algorithm to prevent floating-point accumulation error */
+export function kahanSum(arr: number[]): number {
+  let sum = 0.0;
+  let c = 0.0; // A running compensation for lost low-significance bits.
+  for (let i = 0; i < arr.length; i++) {
+    const y = arr[i] - c;
+    const t = sum + y;
+    c = (t - sum) - y;
+    sum = t;
+  }
+  return sum;
+}
+
 export function mean(arr: number[]) {
-  return arr.reduce((s, v) => s + v, 0) / arr.length;
+  if (arr.length === 0) return 0;
+  return kahanSum(arr) / arr.length;
 }
 
 export function variance(arr: number[], ddof = 1) {
+  if (arr.length <= ddof) return 0;
   const m = mean(arr);
-  return arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - ddof);
+  const squaredDiffs = arr.map(v => (v - m) ** 2);
+  return kahanSum(squaredDiffs) / (arr.length - ddof);
 }
 
 export function sd(arr: number[], ddof = 1) {
@@ -211,13 +227,15 @@ export function normalInv(p: number) {
 export function tCDF(t: number, df: number): number {
   if (df <= 0) return 0.5;
   const x = df / (df + t * t);
-  return 1 - 0.5 * incompleteBeta(x, df / 2, 0.5);
+  const val = 0.5 * incompleteBeta(x, df / 2, 0.5);
+  return t >= 0 ? 1 - val : val;
 }
 
-/** t critical value (bisection on tCDF) */
+/** t critical value (bisection on tCDF with convergence tolerance breakout) */
 export function tCrit(alpha: number, df: number): number {
   let lo = 0, hi = 100;
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 40; i++) {
+    if (hi - lo < 1e-13) break;
     const mid = (lo + hi) / 2;
     if (1 - tCDF(mid, df) < alpha / 2) hi = mid;
     else lo = mid;
@@ -236,10 +254,11 @@ export function chi2CDF(x: number, k: number): number {
   return regularizedGammaP(k / 2, x / 2);
 }
 
-/** Chi-square critical value (bisection) */
+/** Chi-square critical value (bisection with convergence tolerance breakout) */
 export function chi2Crit(alpha: number, df: number): number {
   let lo = 0, hi = df + 10 * Math.sqrt(2 * df);
-  for (let i = 0; i < 80; i++) {
+  for (let i = 0; i < 40; i++) {
+    if (hi - lo < 1e-13) break;
     const mid = (lo + hi) / 2;
     if (1 - chi2CDF(mid, df) < alpha) hi = mid;
     else lo = mid;
@@ -959,4 +978,154 @@ export function parseCSV(text: string): ParsedCSV | null {
     rowCount: rows.length,
     colCount,
   };
+}
+
+// ── Matrix Mathematics Helpers for Multiple Regression ───────────────────
+
+function transpose(matrix: number[][]): number[][] {
+  const r = matrix.length;
+  const c = matrix[0].length;
+  const out = Array.from({ length: c }, () => Array(r).fill(0));
+  for (let i = 0; i < r; i++) {
+    for (let j = 0; j < c; j++) {
+      out[j][i] = matrix[i][j];
+    }
+  }
+  return out;
+}
+
+function multiply(A: number[][], B: number[][]): number[][] {
+  const rA = A.length;
+  const cA = A[0].length;
+  const cB = B[0].length;
+  const out = Array.from({ length: rA }, () => Array(cB).fill(0));
+  for (let i = 0; i < rA; i++) {
+    for (let j = 0; j < cB; j++) {
+      let sum = 0;
+      for (let k = 0; k < cA; k++) {
+        sum += A[i][k] * B[k][j];
+      }
+      out[i][j] = sum;
+    }
+  }
+  return out;
+}
+
+function invertMatrix(matrix: number[][]): number[][] | null {
+  const n = matrix.length;
+  const aug = matrix.map((row, i) => [
+    ...row,
+    ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)),
+  ]);
+
+  for (let i = 0; i < n; i++) {
+    let maxRow = i;
+    for (let r = i + 1; r < n; r++) {
+      if (Math.abs(aug[r][i]) > Math.abs(aug[maxRow][i])) {
+        maxRow = r;
+      }
+    }
+
+    const temp = aug[i];
+    aug[i] = aug[maxRow];
+    aug[maxRow] = temp;
+
+    const pivot = aug[i][i];
+    if (Math.abs(pivot) < 1e-12) return null; // Singular matrix
+
+    for (let j = i; j < 2 * n; j++) {
+      aug[i][j] /= pivot;
+    }
+
+    for (let r = 0; r < n; r++) {
+      if (r === i) continue;
+      const factor = aug[r][i];
+      for (let j = i; j < 2 * n; j++) {
+        aug[r][j] -= factor * aug[i][j];
+      }
+    }
+  }
+
+  return aug.map((row) => row.slice(n));
+}
+
+export interface MultipleRegressionResult {
+  coefficients: number[];
+  r2: number;
+}
+
+export function multipleRegression(X: number[][], Y: number[]): MultipleRegressionResult | null {
+  const N = Y.length;
+  if (N === 0 || X.length !== N) return null;
+  const P = X[0].length;
+
+  const Xt = transpose(X);
+  const XtX = multiply(Xt, X);
+  const invXtX = invertMatrix(XtX);
+  if (!invXtX) return null;
+
+  const Ycol = Y.map((y) => [y]);
+  const XtY = multiply(Xt, Ycol);
+  const beta = multiply(invXtX, XtY).map((row) => row[0]);
+
+  const meanY = Y.reduce((a, b) => a + b, 0) / N;
+  let rss = 0;
+  let tss = 0;
+  for (let i = 0; i < N; i++) {
+    let pred = 0;
+    for (let j = 0; j < P; j++) {
+      pred += X[i][j] * beta[j];
+    }
+    rss += (Y[i] - pred) ** 2;
+    tss += (Y[i] - meanY) ** 2;
+  }
+
+  const r2 = tss === 0 ? 0 : 1 - rss / tss;
+  return { coefficients: beta, r2 };
+}
+
+// ─── Visual Downsampling ───────────────────────────────────────────────────
+export function downsample2D<T>(pts: T[], maxPoints: number = 1500): T[] {
+  if (pts.length <= maxPoints) return pts;
+  const result: T[] = [];
+  const step = pts.length / maxPoints;
+  for (let i = 0; i < maxPoints; i++) {
+    // Pick a random point within the current window to avoid aliasing artifacts
+    const index = Math.floor(i * step + Math.random() * step);
+    result.push(pts[Math.min(index, pts.length - 1)]);
+  }
+  return result;
+}
+
+export function pacf(series: number[], lags: number): number[] {
+  const ac = acf(series, lags);
+  const out = Array(lags + 1).fill(0);
+  out[0] = 1.0;
+  if (lags < 1) return out;
+  if (series.length < 3) return out;
+  
+  out[1] = ac[1] || 0;
+  
+  let phi = Array(lags + 1).fill(0);
+  phi[1] = ac[1] || 0;
+  
+  for (let k = 2; k <= lags; k++) {
+    let num = ac[k] || 0;
+    let den = 1.0;
+    for (let j = 1; j < k; j++) {
+      num -= phi[j] * (ac[k - j] || 0);
+      den -= phi[j] * (ac[j] || 0);
+    }
+    const val = Math.abs(den) > 1e-9 ? num / den : 0;
+    out[k] = val;
+    
+    const nextPhi = Array(lags + 1).fill(0);
+    nextPhi[k] = val;
+    for (let j = 1; j < k; j++) {
+      nextPhi[j] = phi[j] - val * phi[k - j];
+    }
+    phi = nextPhi;
+  }
+  
+  return out;
 }

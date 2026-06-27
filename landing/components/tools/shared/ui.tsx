@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type RefObject } from "react";
-import { Clipboard, Check, Download } from "lucide-react";
+import { useState, type RefObject, useEffect } from "react";
+import { Clipboard, Check, Download, Sparkles } from "lucide-react";
+import { eventBus } from "@/lib/eventBus";
 
 /* ── Reusable field / stat / tabs ────────────────────────────────────────── */
 
@@ -174,12 +175,13 @@ export function ToolGrid({
 }
 
 export function Btn({
-  children, onClick, primary = false, className = "",
-}: { children: React.ReactNode; onClick: () => void; primary?: boolean; className?: string }) {
+  children, onClick, primary = false, className = "", disabled = false,
+}: { children: React.ReactNode; onClick: () => void; primary?: boolean; className?: string; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full rounded-full px-4 py-2.5 text-sm transition-colors ${
+      disabled={disabled}
+      className={`w-full rounded-full px-4 py-2.5 text-sm transition-colors disabled:opacity-50 disabled:pointer-events-none ${
         primary
           ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:opacity-90"
           : "border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800"
@@ -317,3 +319,43 @@ export function DownloadChartButton({
     </button>
   );
 }
+
+export function Interpretation({ text }: { text: string | null }) {
+  if (!text) return null;
+  const askTutor = () => {
+    eventBus.emit("statslab:ask-tutor", { prompt: text });
+  };
+  return (
+    <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3 text-left">
+      <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
+        Interpretation
+      </div>
+      <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
+        {text}
+      </p>
+      <div className="flex justify-end mt-3 border-t border-neutral-200/40 dark:border-neutral-800/40 pt-2.5">
+        <button
+          type="button"
+          onClick={askTutor}
+          className="inline-flex items-center gap-1.5 rounded-full bg-neutral-900 dark:bg-white hover:opacity-90 text-white dark:text-neutral-900 px-3.5 py-1.5 text-[11px] font-semibold shadow-sm transition-all"
+        >
+          <Sparkles className="w-3 h-3 text-orange-400" />
+          Explain with AI Tutor
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function useTutorInput(handlers: Record<string, (val: any) => void>) {
+  useEffect(() => {
+    const unsubscribe = eventBus.on("statslab:set-input", ({ param, value }) => {
+      if (param && handlers[param]) {
+        handlers[param](value);
+      }
+    });
+    return unsubscribe;
+  }, [handlers]);
+}
+
+export { useRegisterToolState } from "@/hooks/useRegisterToolState";

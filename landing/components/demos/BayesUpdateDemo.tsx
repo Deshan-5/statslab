@@ -38,9 +38,9 @@ export default function BayesUpdateDemo() {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#e5e5e5" />
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
       <path d={toPath(prior.xs, prior.ys)} fill="none" stroke="#a3a3a3" strokeWidth={1.5} strokeDasharray="4 4" />
-      <path d={toPath(post.xs, post.ys)} fill="none" stroke="#171717" strokeWidth={2}
+      <path d={toPath(post.xs, post.ys)} fill="none" stroke="var(--chart-ink)" strokeWidth={2}
             style={{ transition: "all 0.4s ease" }} />
       <line x1={sx(trueP)} y1={PAD} x2={sx(trueP)} y2={H - PAD} stroke="#fb923c" strokeWidth={1.5} strokeDasharray="3 3" />
       <text x={PAD} y={20} fontSize="10" fill="#737373">

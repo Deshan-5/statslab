@@ -120,3 +120,70 @@ input[type="range"]::-moz-range-thumb {
 /* Hide scrollbar but keep scroll functionality */
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ── Print Media Styles for Reports ────────────────────────────────── */
+@media print {
+  html, body, main, .h-screen, .overflow-hidden, .min-h-0 {
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    background: white !important;
+    color: black !important;
+  }
+  header, aside, footer, [role="status"], .print\:hidden {
+    display: none !important;
+  }
+  .flex, .flex-col, .grid {
+    display: block !important;
+  }
+  .print\:break-inside-avoid {
+    break-inside: avoid !important;
+  }
+  svg, img, canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}
+
+/* ── Flowing animated orange aura glow ──────────────────────────────── */
+.sl-glow-flow {
+  animation: slGlowFlow 7s ease-in-out infinite alternate;
+}
+@keyframes slGlowFlow {
+  0% {
+    transform: scale(0.94);
+    filter: blur(40px);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.06);
+    filter: blur(55px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.01);
+    filter: blur(45px);
+    opacity: 0.85;
+  }
+}
+
+/* ── Floating animated mesh backgrounds ────────────────────────────── */
+.sl-mesh-drift-1 {
+  animation: slMeshDrift1 25s ease-in-out infinite alternate;
+}
+.sl-mesh-drift-2 {
+  animation: slMeshDrift2 30s ease-in-out infinite alternate;
+}
+@keyframes slMeshDrift1 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(12%, -8%) scale(1.15); }
+  100% { transform: translate(-6%, 12%) scale(0.9); }
+}
+@keyframes slMeshDrift2 {
+  0% { transform: translate(0, 0) scale(1.1); }
+  50% { transform: translate(-12%, 12%) scale(0.92); }
+  100% { transform: translate(8%, -10%) scale(1.22); }
+}
+
+
+

@@ -57,10 +57,10 @@ export default function HypothesisTestDemo() {
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="#e5e5e5" />
+      <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
       <path d={rejArea} fill="#dc2626" fillOpacity={0.12} />
       <path d={rejAreaLeft} fill="#dc2626" fillOpacity={0.12} />
-      <path d={line} fill="none" stroke="#171717" strokeWidth={2} />
+      <path d={line} fill="none" stroke="var(--chart-ink)" strokeWidth={2} />
       <line x1={px(CRIT)} y1={PAD} x2={px(CRIT)} y2={H - PAD} stroke="#dc2626" strokeWidth={1} strokeDasharray="3 3" />
       <line x1={px(-CRIT)} y1={PAD} x2={px(-CRIT)} y2={H - PAD} stroke="#dc2626" strokeWidth={1} strokeDasharray="3 3" />
 

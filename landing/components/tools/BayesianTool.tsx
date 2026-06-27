@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import {
-  Tabs, Field, Stat, NumberInput, Select, Panel, Btn, Formula,
+  Tabs, Field, Stat, NumberInput, Select, Panel, Btn, Formula, Interpretation,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -56,6 +57,7 @@ export default function BayesianTool() {
   const [k, setK] = useState(8);
   const [binCol, setBinCol] = useState<string | null>(null);
 
+  useRegisterToolState("bayesian", { tab, preset, aPri, bPri, n, k, binCol }, { tab: setTab, preset: setPreset, aPri: setAPri, bPri: setBPri, n: setN, k: setK, binCol: setBinCol });
   const wsCount = useMemo(() => {
     if (!dataset || !binCol) return null;
     const c = dataset.columns.find((c) => c.name === binCol);
@@ -124,8 +126,8 @@ export default function BayesianTool() {
 
       {tab === "Beta-Binomial" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Panel>
+        <div className="lg:col-span-2">
+        <Panel>
               <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
                 <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
                 {[0, 0.25, 0.5, 0.75, 1].map((t) => (
@@ -147,14 +149,7 @@ export default function BayesianTool() {
                 </g>
               </svg>
             </Panel>
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {bbInterpretation}
-              </p>
-            </div>
+            <Interpretation text={bbInterpretation} />
           </div>
 
           <Panel className="space-y-5">
@@ -214,14 +209,7 @@ export default function BayesianTool() {
                 {seqLog.map((l, i) => <div key={i} className="text-neutral-700">{l}</div>)}
               </div>
             </Panel>
-            <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {seqInterpretation}
-              </p>
-            </div>
+            <Interpretation text={seqInterpretation} />
           </div>
           <Panel className="space-y-5">
             <NumberInput label="Initial α" value={seqA} onChange={setSeqA} step={0.5} min={0.1} />

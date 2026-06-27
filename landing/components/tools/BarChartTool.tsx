@@ -5,13 +5,14 @@ import {
   parseNumbers, mean, sd, sem, oneWayANOVA, tCrit,
 } from "./shared/stats";
 import {
-  Tabs, DataTextArea, Select, SampleDataButton, Panel, Btn, Verdict,
+  Tabs, DataTextArea, Select, SampleDataButton, Panel, Btn, Verdict, Interpretation,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
 
 const W = 720, H = 320, PAD = 40;
-const COLORS = ["#171717", "#fb923c", "#0ea5e9", "#16a34a", "#a855f7", "#dc2626"];
+const COLORS = ["#6366f1", "#fb923c", "#0ea5e9", "#16a34a", "#a855f7", "#dc2626"];
 
 type Group = { name: string; raw: string };
 const SAMPLES = [
@@ -29,6 +30,7 @@ export default function BarChartTool() {
   const [valueCol, setValueCol] = useState<string | null>(null);
   const [groupCol, setGroupCol] = useState<string | null>(null);
 
+  useRegisterToolState("bar-chart", { tab, errBars, sortBy, valueCol, groupCol }, { tab: setTab, errBars: setErrBars, sortBy: setSortBy, valueCol: setValueCol, groupCol: setGroupCol });
   const wsValid = useMemo(() => {
     if (!dataset || !valueCol) return [];
     const v = dataset.columns.find((c) => c.name === valueCol);
@@ -117,8 +119,25 @@ export default function BarChartTool() {
                     <line x1={sx(i)} y1={sy(g.mean - err)} x2={sx(i)} y2={sy(g.mean + err)} stroke="var(--chart-muted)" strokeWidth={1.5} />
                     <line x1={sx(i) - 8} y1={sy(g.mean + err)} x2={sx(i) + 8} y2={sy(g.mean + err)} stroke="var(--chart-muted)" strokeWidth={1.5} />
                     <line x1={sx(i) - 8} y1={sy(g.mean - err)} x2={sx(i) + 8} y2={sy(g.mean - err)} stroke="var(--chart-muted)" strokeWidth={1.5} />
-                    <text x={sx(i)} y={H - PAD + 18} textAnchor="middle" fontSize="11" fill="var(--chart-muted)">{g.name}</text>
-                    <text x={sx(i)} y={top - 8} textAnchor="middle" fontSize="11" fill="var(--chart-ink)" fontWeight={500}>{g.mean.toFixed(2)}</text>
+                    {(() => {
+                      const isRotated = sorted.length > 5 || sorted.some(s => s.name.length > 8);
+                      const displayVal = g.name.length > 15 ? g.name.slice(0, 13) + "..." : g.name;
+                      const tx = sx(i);
+                      const ty = H - PAD + 18;
+                      return (
+                        <text
+                          x={tx}
+                          y={ty}
+                          textAnchor={isRotated ? "end" : "middle"}
+                          fontSize="10"
+                          fill="var(--chart-muted)"
+                          transform={isRotated ? `rotate(-25, ${tx}, ${ty})` : undefined}
+                        >
+                          {displayVal}
+                        </text>
+                      );
+                    })()}
+                    <text x={sx(i)} y={top - 8} textAnchor="middle" fontSize="10" fill="var(--chart-ink)" fontWeight={500}>{g.mean.toFixed(2)}</text>
                   </g>
                 );
               })}
@@ -142,16 +161,7 @@ export default function BarChartTool() {
               </div>
             </Panel>
           )}
-          {interpretation && (
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {interpretation}
-              </p>
-            </div>
-          )}
+          <Interpretation text={interpretation} />
         </div>
         <Panel className="space-y-5">
           {tab === "Workspace" && dataset && (

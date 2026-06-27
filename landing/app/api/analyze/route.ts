@@ -4,10 +4,17 @@
  * POST /api/analyze
  *   body: { stats: object, columns: string[], rowCount: number, sampleRows?: string[][] }
  *   200:  { summary: string, suggestions: {toolId: string, reason: string}[] }
+ *   401:  not authenticated
+ *   429:  rate limit exceeded
  *   500:  { error: string }
+ *
+ * Auth:  requires a valid NextAuth session.
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -46,6 +53,34 @@ Return ONLY valid JSON (no markdown fences) in this exact shape:
 }`;
 
 export async function POST(req: NextRequest) {
+  /* ── 1. Auth check ───────────────────────────────────────────────────── */
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json(
+      { error: "You must be signed in to use dataset analysis." },
+      { status: 401 }
+    );
+  }
+
+  /* ── 2. Rate limit (10 requests per minute per user) ─────────────────── */
+  // Lower limit than /api/tutor since each call processes a full dataset summary.
+  const rateLimitKey = `analyze:${session.user.email ?? "unknown"}`;
+  const rl = await rateLimit(rateLimitKey, { limit: 10, windowSec: 60 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: `Rate limit exceeded. Try again in ${rl.retryAfter}s.` },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rl.retryAfter),
+          "X-RateLimit-Limit": "10",
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
+
+  /* ── 3. API key check ────────────────────────────────────────────────── */
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -85,7 +120,9 @@ export async function POST(req: NextRequest) {
     const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
     try {
       const parsed = JSON.parse(cleaned);
-      return NextResponse.json(parsed);
+      return NextResponse.json(parsed, {
+        headers: { "X-RateLimit-Remaining": String(rl.remaining) },
+      });
     } catch {
       // Fallback: return raw text as summary
       return NextResponse.json({

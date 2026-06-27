@@ -6,7 +6,7 @@ import {
 } from "./shared/stats";
 import {
   Tabs, Field, Stat, NumberInput, DataTextArea, Select, SampleDataButton,
-  Panel, Btn,
+  Panel, Btn, Interpretation, useTutorInput, useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -77,6 +77,29 @@ export default function CLTTool() {
     setMeans((p) => [...p, s / n]);
   };
 
+  useTutorInput({
+    n: setN,
+    speed: setSpeed,
+    src: (val) => {
+      // Validate or map value to Source
+      if (["Normal", "Uniform", "Exponential", "Bimodal", "Custom"].includes(val)) {
+        setSrc(val as Source);
+      }
+    },
+    reset: () => setMeans([]),
+    draw: () => drawOnce(),
+  });
+
+  useRegisterToolState("central-limit-theorem", { n, src, speed, running, customRaw, valueCol, tab }, {
+    n: setN,
+    src: (val) => { if (["Normal", "Uniform", "Exponential", "Bimodal", "Custom", "Workspace"].includes(val)) setSrc(val as Source); },
+    speed: setSpeed,
+    running: setRunning,
+    customRaw: setCustomRaw,
+    valueCol: setValueCol,
+    tab: setTab,
+  });
+
   // bin
   const sigma = samplerRef.current.sigma;
   const mu = samplerRef.current.mu;
@@ -111,7 +134,7 @@ export default function CLTTool() {
       <Tabs tabs={["Simulation"]} active={tab} onChange={setTab} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Panel>
+        <Panel>
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
               <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--chart-axis)" />
               {density.map((v, i) => (
@@ -129,16 +152,7 @@ export default function CLTTool() {
               </text>
             </svg>
           </Panel>
-          {interpretation && (
-            <div className="mt-4 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-1">
-                Interpretation
-              </div>
-              <p className="text-sm text-neutral-700 dark:text-neutral-300 leading-relaxed">
-                {interpretation}
-              </p>
-            </div>
-          )}
+          <Interpretation text={interpretation} />
         </div>
 
         <Panel className="space-y-5">

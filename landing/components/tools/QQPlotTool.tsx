@@ -6,6 +6,7 @@ import {
 } from "./shared/stats";
 import {
   Tabs, Stat, DataTextArea, SampleDataButton, Panel, Select, Field, Btn,
+  useRegisterToolState,
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
@@ -60,6 +61,7 @@ export default function QQPlotTool() {
     return (parseNumbers(raw) ?? []).map((v) => ({ v }));
   }, [tab, dataset, valueCol, raw]);
 
+  useRegisterToolState("qq-plot", { tab, family, valueCol, standardize }, { tab: setTab, family: setFamily, valueCol: setValueCol, standardize: setStandardize });
   const sortedAsc = useMemo(
     () => [...sample].sort((a, b) => a.v - b.v),
     [sample]
@@ -158,7 +160,7 @@ export default function QQPlotTool() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <Panel>
+        <Panel>
             <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`}
                  className={`w-full h-auto ${tab === "Workspace" ? "cursor-crosshair" : ""}`}
                  onPointerDown={onPointerDown}
@@ -196,7 +198,7 @@ export default function QQPlotTool() {
                 return (
                   <circle key={i} cx={sx(p.theo)} cy={sy(p.samp)}
                     r={sel ? 4 : 2.5}
-                    fill={sel ? "#fb923c" : "#171717"} fillOpacity={sel ? 0.95 : 0.65} />
+                    fill={sel ? "#fb923c" : "var(--chart-ink)"} fillOpacity={sel ? 0.95 : 0.65} />
                 );
               })}
               {brush && (
