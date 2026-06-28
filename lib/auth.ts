@@ -28,16 +28,26 @@ const devProviders =
       ]
     : [];
 
+// GitHub is only offered when a real OAuth app is configured — without it,
+// NextAuth would register a provider that always fails on click.
+export const isGithubAuthEnabled = Boolean(
+  process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+);
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     }),
-    GithubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID ?? "",
-      clientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
-    }),
+    ...(isGithubAuthEnabled
+      ? [
+          GithubProvider({
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+          }),
+        ]
+      : []),
     ...devProviders,
   ],
   session: { strategy: "jwt" },

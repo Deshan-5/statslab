@@ -264,7 +264,7 @@ export default function DataStrip() {
                                     >
                                       Inverse (1/x)
                                     </button>
-                                    <div className="border-t border-neutral-100 dark:border-neutral-905 my-1" />
+                                    <div className="border-t border-neutral-100 dark:border-neutral-900 my-1" />
                                   </>
                                 )}
 
@@ -300,7 +300,7 @@ export default function DataStrip() {
                                     >
                                       Fill with 0
                                     </button>
-                                    <div className="border-t border-neutral-100 dark:border-neutral-905 my-1" />
+                                    <div className="border-t border-neutral-100 dark:border-neutral-900 my-1" />
                                   </>
                                 )}
 

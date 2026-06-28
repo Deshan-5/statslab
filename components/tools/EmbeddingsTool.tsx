@@ -119,9 +119,11 @@ export default function EmbeddingsTool() {
   const autoRotRef = useRef(true);
   const flyTriggerRef = useRef<((t: WordPoint) => void) | null>(null);
 
-  // Vector viz refs
-  const subLineRef = useRef<THREE.Line | null>(null);
-  const addLineRef = useRef<THREE.Line | null>(null);
+  // Vector viz refs — shafts are solid cylinders (not THREE.Line) so they
+  // stay visible regardless of zoom; THREE.Line ignores linewidth on most
+  // WebGL backends and was rendering as a near-invisible hairline.
+  const subLineRef = useRef<THREE.Mesh | null>(null);
+  const addLineRef = useRef<THREE.Mesh | null>(null);
   const subConeRef = useRef<THREE.Mesh | null>(null);
   const addConeRef = useRef<THREE.Mesh | null>(null);
   const resultGlowRef = useRef<THREE.Mesh | null>(null);
@@ -484,7 +486,7 @@ export default function EmbeddingsTool() {
     const scene = sceneRef.current;
     if (!scene) return;
 
-    const disposeRef = (r: React.MutableRefObject<THREE.Line | THREE.Mesh | null>) => {
+    const disposeRef = (r: React.MutableRefObject<THREE.Mesh | null>) => {
       if (r.current) {
         scene.remove(r.current);
         r.current.geometry.dispose();
@@ -492,42 +494,54 @@ export default function EmbeddingsTool() {
         r.current = null;
       }
     };
-    disposeRef(subLineRef as React.MutableRefObject<THREE.Line | null>);
-    disposeRef(addLineRef as React.MutableRefObject<THREE.Line | null>);
-    disposeRef(subConeRef as React.MutableRefObject<THREE.Mesh | null>);
-    disposeRef(addConeRef as React.MutableRefObject<THREE.Mesh | null>);
+    disposeRef(subLineRef);
+    disposeRef(addLineRef);
+    disposeRef(subConeRef);
+    disposeRef(addConeRef);
     if (resultGlowRef.current) resultGlowRef.current.visible = false;
 
     if (!selectedA || !selectedB || !selectedC || !resultWord) return;
 
+    // Arrowhead + shaft are sized relative to the vector's own length, not a
+    // fixed world-space constant — otherwise a cone tuned to look right from
+    // the wide establishing shot balloons into a giant triangle once the
+    // camera flies in close to a short within-cluster hop.
     const makeArrow = (
-      from: WordPoint, to: WordPoint, color: number, dashed: boolean
-    ): { line: THREE.Line; cone: THREE.Mesh } => {
-      const pts = [new THREE.Vector3(from.x, from.y, from.z), new THREE.Vector3(to.x, to.y, to.z)];
-      const geo = new THREE.BufferGeometry().setFromPoints(pts);
-      const mat = dashed
-        ? new THREE.LineDashedMaterial({ color, dashSize: 1.2, gapSize: 0.5 })
-        : new THREE.LineBasicMaterial({ color });
-      const line = new THREE.Line(geo, mat);
-      if (dashed) line.computeLineDistances();
-      scene.add(line);
+      from: WordPoint, to: WordPoint, color: number, faded: boolean
+    ): { line: THREE.Mesh; cone: THREE.Mesh } => {
+      const start = new THREE.Vector3(from.x, from.y, from.z);
+      const end = new THREE.Vector3(to.x, to.y, to.z);
+      const full = new THREE.Vector3().subVectors(end, start);
+      const length = Math.max(full.length(), 0.001);
+      const dir = full.clone().normalize();
 
-      const dir = new THREE.Vector3(to.x - from.x, to.y - from.y, to.z - from.z).normalize();
-      const cGeo = new THREE.ConeGeometry(0.7, 2.5, 8);
+      const coneHeight = THREE.MathUtils.clamp(length * 0.22, 0.5, 1.6);
+      const coneRadius = coneHeight * 0.32;
+      const shaftLength = Math.max(length - coneHeight, 0.01);
+      const shaftRadius = coneRadius * 0.22;
+
+      const shaftGeo = new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLength, 8);
+      const shaftMat = new THREE.MeshBasicMaterial({ color, transparent: faded, opacity: faded ? 0.55 : 0.9 });
+      const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+      shaft.position.copy(start).addScaledVector(dir, shaftLength / 2);
+      shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      scene.add(shaft);
+
+      const cGeo = new THREE.ConeGeometry(coneRadius, coneHeight, 10);
       const cMat = new THREE.MeshBasicMaterial({ color });
       const cone = new THREE.Mesh(cGeo, cMat);
-      cone.position.set(to.x, to.y, to.z);
+      cone.position.copy(end);
       cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
       scene.add(cone);
-      return { line, cone };
+      return { line: shaft, cone };
     };
 
-    // Amber dashed: B → A (the subtraction step)
+    // Amber, slightly faded: B → A (the subtraction step)
     const { line: sl, cone: sc } = makeArrow(selectedB, selectedA, 0xf59e0b, true);
     subLineRef.current = sl;
     subConeRef.current = sc;
 
-    // Cyan solid: C → Result (the addition step)
+    // Cyan, fully opaque: C → Result (the addition step)
     const { line: al, cone: ac } = makeArrow(selectedC, resultWord, 0x22d3ee, false);
     addLineRef.current = al;
     addConeRef.current = ac;

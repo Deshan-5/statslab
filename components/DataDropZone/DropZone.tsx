@@ -102,7 +102,7 @@ export function DropZone({
 
           {/* Label + example links */}
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-neutral-800 dark:text-neutral-205">
+            <div className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
               Drop a dataset to analyze
             </div>
             <div className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">

@@ -448,7 +448,7 @@ export function DataQualityBadge({ quality, analysis, fileName }: Props) {
                     Error Report CSV
                   </button>
                 )}
-                <div className="flex items-center gap-1 text-[9px] text-neutral-400 dark:text-neutral-505 ml-auto">
+                <div className="flex items-center gap-1 text-[9px] text-neutral-400 dark:text-neutral-500 ml-auto">
                   <Info className="w-3 h-3" />
                   Outliers via 1.5×IQR fence
                 </div>

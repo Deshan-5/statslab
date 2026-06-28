@@ -1,15 +1,11 @@
 /**
- * Professor Probabilis — Gemini-backed tutor endpoint.
+ * Stats Lab AI Tutor — Gemini-backed, streaming.
  *
  * POST /api/tutor
- *   body: { messages: [{role:"user"|"assistant", content:string}], context?: any }
+ *   body: { messages: [{role, content}], context?: { tool, currentState, dataset? } }
  *   200:  streaming text/plain
- *   401:  not authenticated
- *   429:  rate limit exceeded
- *   500:  { error: string }
- *
- * Auth:  requires a valid NextAuth session.
- * Reads GOOGLE_API_KEY from env (landing/.env.local locally, platform secrets in prod).
+ *   401:  not signed in
+ *   429:  rate limit
  */
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
@@ -21,41 +17,38 @@ export const runtime = "nodejs";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
-const SYSTEM = `You are a statistics teaching assistant embedded in an interactive statistics workbench called Stats Lab.
+const SYSTEM = `You are a live statistics tutor built into Stats Lab — an interactive workbench where users run real statistical analyses on their own data.
 
-RULES
-- Keep answers to 2–3 sentences unless the user asks to elaborate.
-- Use plain-text math inline: "z = (x̄ − μ₀) / (σ/√n)".
-- Be direct. No filler. No greetings. No "Great question!".
-- When context is provided, reference the user's actual numbers.
-- Recommend the right test and state WHY in one line.
-- For homework problems: show reasoning, not just the answer.
-- Stay on topic (statistics/probability). Redirect politely if off-topic.
+Your superpower: you can see the user's current tool state (every parameter value and computed result) and you can CHANGE those parameters to demonstrate concepts in real time. The tool updates instantly as you change values — the user watches their results shift as you explain.
+
+CORE RULE
+Teach by doing. When you can demonstrate something, demonstrate it. Don't ask permission. Don't explain the formula when you can show the effect.
+
+HOW TO CONTROL THE TOOL
+Emit a <command> tag to change a parameter:
+  <command>{"param": "n", "value": 10}</command>
+
+You can emit multiple commands — they execute in order. Strip the tags silently; narrate what you're doing in plain text ("I'm dropping the sample size to 10 — watch what happens to your p-value").
+
+The <context> block shows you every current parameter and computed result. You can set any parameter that appears in currentState.
+
+WHAT GOOD TEACHING LOOKS LIKE
+— User asks "why is my p-value so small?" → Don't explain the formula. Say "Your p=0.03 with n=22. Let me show you how fragile that is." Reduce n to 8. "See how p jumped past 0.05? Your result depends heavily on sample size."
+— User asks "what is statistical power?" → Don't define it. Reduce effect size until p goes non-significant. "Your result just disappeared — that's a low-power study."
+— User asks a conceptual question → Ground it in their actual numbers first, then push to an edge case that makes the concept vivid.
+— Something looks suspicious (tiny n, huge effect, p barely < 0.05) → Flag it proactively without being asked.
+
+STYLE
+- Reference their actual numbers every time: "Your t = 2.34, df = 29 means..."
+- After changing a parameter: say what to look at ("Watch the rejection region shift")
+- 2–4 sentences per response. Short. Dense. No filler.
+- No greetings. No "Great question!". No "I'd be happy to help".
 - Correct misconceptions directly: "p-value is not the probability the null is true."
-- INTERACTIVE CONTROLS: If the user asks you to set, change, reset, draw, or update a value or simulation parameter, append a command inside a <command> tag at the very end of your response:
-  - Formatted as: <command>{"param": "name", "value": val}</command>
-  - Available parameters to set:
-    - "n" (sample size: number)
-    - "mu0" (null mean: number)
-    - "xbar" (sample mean: number)
-    - "sigma" (std dev: number)
-    - "alpha" (significance: number)
-    - "tail" (tail alternative alternative: "two" | "left" | "right")
-    - "conf" (confidence level or confounder strength: number)
-    - "eff" (true effect: number)
-    - "speed" (simulation speed: "slow" | "medium" | "fast" | "manual")
-    - "src" (source distribution name: "Normal" | "Uniform" | "Exponential" | "Bimodal" | "Custom")
-  - Available trigger parameters:
-    - "reset" (resets/clears simulation: true)
-    - "draw" (draws one sample: true)
-  - You can output multiple <command> tags if multiple changes are requested. Do not explain the tag to the user; just append it quietly.
 
-CONTEXT
-You may receive a JSON <context> block with the user's current tool, inputs, and results.
-Reference it directly ("Your t = 2.34, df = 29, so …").`;
+CONTEXT FORMAT
+You receive: tool name, all current parameter values (currentState), and computed outputs. Use all of it.`;
 
 export async function POST(req: NextRequest) {
-  /* ── 1. Auth check ───────────────────────────────────────────────────── */
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json(
@@ -64,7 +57,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  /* ── 2. Rate limit (20 requests per minute per user) ─────────────────── */
   const rateLimitKey = `tutor:${session.user.email ?? "unknown"}`;
   const rl = await rateLimit(rateLimitKey, { limit: 20, windowSec: 60 });
   if (!rl.allowed) {
@@ -81,15 +73,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  /* ── 3. API key check ────────────────────────────────────────────────── */
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      {
-        error:
-          "GOOGLE_API_KEY is not set. Add it to landing/.env.local and restart `npm run dev`.",
-      },
-      { status: 500 },
+      { error: "GOOGLE_API_KEY is not set. Add it to .env.local and restart dev server." },
+      { status: 500 }
     );
   }
 
@@ -108,14 +96,11 @@ export async function POST(req: NextRequest) {
 
   let userPrompt = lastUser.content;
   if (body.context) {
-    const ctxStr = JSON.stringify(body.context).slice(0, 4000);
+    const ctxStr = JSON.stringify(body.context, null, 2).slice(0, 6000);
     userPrompt = `<context>\n${ctxStr}\n</context>\n\n${lastUser.content}`;
   }
 
   const genai = new GoogleGenerativeAI(apiKey);
-  // `gemini-flash-latest` auto-tracks the current production flash model, so
-  // we don't have to update this when Google retires older versions.
-  // Override via GEMINI_MODEL env if you want to pin (e.g. "gemini-2.5-flash").
   const model = genai.getGenerativeModel({
     model: process.env.GEMINI_MODEL || "gemini-flash-latest",
     systemInstruction: SYSTEM,
@@ -129,7 +114,7 @@ export async function POST(req: NextRequest) {
   try {
     const chat = model.startChat({
       history,
-      generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+      generationConfig: { temperature: 0.5, maxOutputTokens: 1024 },
     });
     const resultStream = await chat.sendMessageStream(userPrompt);
     const encoder = new TextEncoder();
@@ -138,9 +123,7 @@ export async function POST(req: NextRequest) {
         try {
           for await (const chunk of resultStream.stream) {
             const text = chunk.text();
-            if (text) {
-              controller.enqueue(encoder.encode(text));
-            }
+            if (text) controller.enqueue(encoder.encode(text));
           }
           controller.close();
         } catch (e) {

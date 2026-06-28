@@ -754,7 +754,7 @@ export default function CausalTool() {
                   className={`w-full inline-flex items-center justify-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold border transition-all ${
                     connectingFromId === selectedNodeId
                       ? "bg-orange-500 text-white border-orange-500 hover:opacity-90"
-                      : "bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-805 hover:bg-neutral-50"
+                      : "bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50"
                   }`}
                 >
                   {connectingFromId === selectedNodeId ? "Click destination node..." : "Draw directed arrow..."}

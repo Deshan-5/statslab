@@ -10,7 +10,7 @@ import { Github } from "lucide-react";
 const CELL = 30;
 const HIGHLIGHT_RADIUS = 150;
 
-export default function SignInClient() {
+export default function SignInClient({ githubEnabled = false }: { githubEnabled?: boolean }) {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/app";
 
@@ -186,14 +186,16 @@ export default function SignInClient() {
           Continue with Google
         </button>
 
-        <button
-          type="button"
-          onClick={() => signIn("github", { callbackUrl })}
-          className="mt-3 inline-flex items-center gap-3 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-6 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-sm w-full justify-center max-w-xs"
-        >
-          <Github className="w-5 h-5" />
-          Continue with GitHub
-        </button>
+        {githubEnabled && (
+          <button
+            type="button"
+            onClick={() => signIn("github", { callbackUrl })}
+            className="mt-3 inline-flex items-center gap-3 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-6 py-3 text-sm font-medium text-neutral-900 dark:text-neutral-100 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors shadow-sm w-full justify-center max-w-xs"
+          >
+            <Github className="w-5 h-5" />
+            Continue with GitHub
+          </button>
+        )}
 
         {/* Developer bypass — only rendered when NEXT_PUBLIC_ENABLE_DEV_AUTH=true (local dev only) */}
         {process.env.NEXT_PUBLIC_ENABLE_DEV_AUTH === "true" && (

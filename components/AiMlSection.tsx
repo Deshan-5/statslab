@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
@@ -38,11 +39,8 @@ function AttentionPreview() {
           </div>
         ))}
         {tokens.map((rowTok, r) => (
-          <>
-            <div
-              key={`rl-${r}`}
-              className="flex items-center justify-end pr-1 text-[9px] font-mono text-neutral-500 dark:text-neutral-500"
-            >
+          <Fragment key={r}>
+            <div className="flex items-center justify-end pr-1 text-[9px] font-mono text-neutral-500 dark:text-neutral-500">
               {rowTok}
             </div>
             {weights[r].map((w, c) => (
@@ -56,7 +54,7 @@ function AttentionPreview() {
                 }}
               />
             ))}
-          </>
+          </Fragment>
         ))}
       </div>
       <div className="mt-4 flex gap-1.5">

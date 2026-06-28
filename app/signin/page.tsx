@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { Suspense } from "react";
 import SignInClient from "./SignInClient";
+import { isGithubAuthEnabled } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Sign In — Stats Lab",
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export default function SignInPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-white dark:bg-neutral-950" />}>
-      <SignInClient />
+      <SignInClient githubEnabled={isGithubAuthEnabled} />
     </Suspense>
   );
 }

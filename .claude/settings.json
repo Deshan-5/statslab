@@ -5,7 +5,16 @@
       "Bash('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' --headless=new --disable-gpu --no-sandbox --screenshot=/private/tmp/claude-501/-Users-deshan-Desktop-desktop-items-statslab-nosync/fee50bab-a3a9-4ed8-929e-f0cfea523510/scratchpad/shots/embeddings2.png --window-size=1400,1000 http://localhost:3005/app?tool=semantic-space)",
       "Bash(npm ls *)",
       "Bash(npm install *)",
-      "Bash(node shot.js)"
+      "Bash(node shot.js)",
+      "Bash(head -100 README.md)",
+      "Bash(wc -l PRD.md)",
+      "Bash(/bin/ls -la)",
+      "Bash(cat app/api/auth/\\\\[...nextauth\\\\]/route.ts)",
+      "Bash(find . -path ./node_modules -prune -o -iname \"*nextauth*\" -print)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(lsof -ti:3005)",
+      "Bash(xargs kill -9)",
+      "Bash(npm run *)"
     ]
   }
 }

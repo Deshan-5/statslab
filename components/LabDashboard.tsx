@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
   ArrowRight, Clock, Star, Search, Command,
-  Upload, MousePointerClick, Sparkles,
+  Upload, MousePointerClick, Sparkles, GraduationCap, X,
 } from "lucide-react";
 import { findTool, type Tool } from "@/lib/tools";
 import DataDropZone from "@/components/DataDropZone";
@@ -12,6 +12,7 @@ import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 
 const RECENT_KEY = "statslab_recent_tools";
 const PINNED_KEY = "statslab_pinned_tools";
+const ONBOARDED_KEY = "statslab:onboarded";
 
 type RecentEntry = { id: string; ts: number };
 
@@ -56,7 +57,19 @@ export default function LabDashboard() {
   const [pinned, setPinned] = useState<string[]>([]);
   const [now, setNow] = useState(() => new Date());
   const [isMac, setIsMac] = useState(true);
+  const [onboarded, setOnboarded] = useState(true); // assume true until we read localStorage
   const { loadExample, dataset } = useWorkspace();
+
+  const dismiss = useCallback(() => {
+    try { localStorage.setItem(ONBOARDED_KEY, "true"); } catch { /* ignore */ }
+    setOnboarded(true);
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(ONBOARDED_KEY) !== "true") setOnboarded(false);
+    } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     try {
@@ -149,6 +162,48 @@ export default function LabDashboard() {
               {pinnedResolved.map((t) => (
                 <ToolRow key={t.id} tool={t} pinned onTogglePin={togglePin} />
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Onboarding card — first-time visitors only ───────────── */}
+        {!onboarded && (
+          <section className="w-full max-w-3xl">
+            <div className="relative rounded-2xl border border-indigo-200 dark:border-indigo-800/50 bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950/20 dark:to-neutral-950 p-6 text-left shadow-sm">
+              <button
+                onClick={dismiss}
+                className="absolute top-4 right-4 p-1.5 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+              <div className="flex items-start gap-4 pr-6">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                  <GraduationCap className="w-5 h-5 text-indigo-500" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-semibold text-[15px] text-neutral-900 dark:text-neutral-100">
+                    The AI teaches by controlling the tool
+                  </h2>
+                  <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400 max-w-md leading-relaxed">
+                    Ask it to demonstrate something and it changes the sliders live — you watch your results shift as it explains why. Not a chatbot next to a demo. One thing.
+                  </p>
+                  <div className="mt-4 flex items-center gap-3 flex-wrap">
+                    <Link
+                      href="/app?tool=hypothesis-test&tab=tutor&autoask=show+me+why+sample+size+matters"
+                      onClick={dismiss}
+                      className="inline-flex items-center gap-2 rounded-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-4 py-2 text-sm font-medium transition-colors shadow-sm"
+                    >
+                      <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+                      See it live
+                      <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                    </Link>
+                    <span className="text-xs text-neutral-400 dark:text-neutral-500 italic">
+                      "show me why sample size matters"
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         )}
