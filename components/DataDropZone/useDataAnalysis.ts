@@ -8,6 +8,7 @@
  * orchestrating component becomes a thin render shell.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import { parseAndAnalyse, analyzeCSV, buildSuggestions } from "./analyse";
 import type { AnalysisResult, Suggestion } from "./types";
@@ -47,6 +48,7 @@ export type UseDataAnalysisReturn = {
 
 export function useDataAnalysis(): UseDataAnalysisReturn {
   const { dataset, loadCSV, clearDataset, loadExample } = useWorkspace();
+  const router = useRouter();
 
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -79,6 +81,28 @@ export function useDataAnalysis(): UseDataAnalysisReturn {
     },
     [loadCSV],
   );
+
+  /* ── Global Paste Event Listener ─────────────────────────────────── */
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      // Don't intercept if user is currently typing in an input, textarea, or contenteditable
+      const activeEl = document.activeElement;
+      if (activeEl) {
+        const tag = activeEl.tagName.toUpperCase();
+        if (tag === "INPUT" || tag === "TEXTAREA" || activeEl.getAttribute("contenteditable") === "true") {
+          return;
+        }
+      }
+
+      const text = e.clipboardData?.getData("text");
+      if (text && text.trim()) {
+        processData(text.trim(), "Pasted dataset");
+      }
+    };
+
+    window.addEventListener("paste", handleGlobalPaste);
+    return () => window.removeEventListener("paste", handleGlobalPaste);
+  }, [analysis, processData]);
 
   /* ── File handlers ───────────────────────────────────────────────── */
   const handleFile = useCallback(
@@ -142,6 +166,8 @@ export function useDataAnalysis(): UseDataAnalysisReturn {
     (name: string) => loadExample(name),
     [loadExample],
   );
+
+
 
   /* ── AI tutor explainer ──────────────────────────────────────────── */
   const explainDatasetWithTutor = useCallback(() => {

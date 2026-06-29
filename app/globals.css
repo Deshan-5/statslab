@@ -123,25 +123,71 @@ input[type="range"]::-moz-range-thumb {
 
 /* ── Print Media Styles for Reports ────────────────────────────────── */
 @media print {
-  html, body, main, .h-screen, .overflow-hidden, .min-h-0 {
+  html, body, main, .h-screen, [class*="overflow-"], .min-h-0 {
     height: auto !important;
     overflow: visible !important;
     position: static !important;
     background: white !important;
     color: black !important;
   }
-  header, aside, footer, [role="status"], .print\:hidden {
-    display: none !important;
+  
+  /* Reset all background and text colors to force clean, ink-friendly black-on-white layout */
+  body, main, div, p, span, h1, h2, h3, h4, h5, h6, li, ul, ol {
+    background-color: transparent !important;
+    color: #171717 !important;
   }
+
+  /* The report paper container itself must be solid white */
+  [class*="print:bg-white"] {
+    background-color: #ffffff !important;
+  }
+
   .flex, .flex-col, .grid {
     display: block !important;
   }
+
+  /* CRITICAL: Hiding rules must be declared after display/flex/grid rules */
+  /* to guarantee they override them during printing. */
+  header, header.flex, header.flex-col,
+  aside, aside.flex, aside.flex-col,
+  footer,
+  [role="status"],
+  .print\:hidden,
+  [class*="print:hidden"] {
+    display: none !important;
+  }
+  
   .print\:break-inside-avoid {
     break-inside: avoid !important;
   }
+  
+  /* Reset wrapper padding, margins, and max-widths so report takes full page width */
+  .p-6, .md\:p-8 {
+    padding: 0 !important;
+  }
+  .max-w-\[1600px\], .max-w-6xl {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .space-y-6 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  
+  /* Charts and SVGs */
   svg, img, canvas {
     max-width: 100% !important;
     height: auto !important;
+    background-color: #ffffff !important;
+    border-color: #e5e5e5 !important;
+  }
+  
+  /* Preserve stroke and fill colors of actual visual data components in SVGs */
+  svg *, svg line, svg path, svg rect, svg circle, svg text {
+    background-color: transparent !important;
+    color: inherit !important;
   }
 }
 

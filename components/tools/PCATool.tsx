@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { mean, sd } from "./shared/stats";
 import { Tabs, Stat, Panel , useRegisterToolState } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
+import { Minimize2, Maximize2 } from "lucide-react";
 
 const W = 560, H = 560, PAD = 50;
 
@@ -116,6 +117,7 @@ export default function PCATool() {
 
   // 3D states
   const [is3D, setIs3D] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [yaw, setYaw] = useState(0.6);
   const [pitch, setPitch] = useState(0.3);
   const [isDragging3D, setIsDragging3D] = useState(false);
@@ -418,17 +420,114 @@ export default function PCATool() {
     return null;
   };
 
+  const renderControls = () => {
+    return (
+      <div className="space-y-5">
+        <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer font-medium border-b border-neutral-100 dark:border-neutral-800 pb-2">
+          <input
+            type="checkbox" checked={is3D}
+            onChange={(e) => setIs3D(e.target.checked)}
+            className="rounded text-indigo-600"
+          />
+          3D Biplot (PC1 / PC2 / PC3)
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+          <input type="checkbox" checked={scaleVars} onChange={(e) => setScaleVars(e.target.checked)} />
+          Standardize variables (z-score)
+        </label>
+        {result ? (
+          <>
+            <Stat label="Observations" value={String(result.n)} />
+            <Stat label="Variables"    value={String(result.k)} />
+            <Stat label="PC1 variance" value={`${((result.var1 / result.totalVar) * 100).toFixed(1)}%`}
+              sub={`λ₁ = ${result.var1.toFixed(3)}`} />
+            <Stat label="PC2 variance" value={`${((result.var2 / result.totalVar) * 100).toFixed(1)}%`}
+              sub={`λ₂ = ${result.var2.toFixed(3)}`} />
+            {is3D && (
+              <Stat label="PC3 variance" value={`${((result.var3 / result.totalVar) * 100).toFixed(1)}%`}
+                sub={`λ₃ = ${result.var3.toFixed(3)}`} />
+            )}
+            <Stat label="Cumulative" value={`${(((result.var1 + result.var2 + (is3D ? result.var3 : 0)) / result.totalVar) * 100).toFixed(1)}%`} />
+            
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-2">Loadings</div>
+              <div className="max-h-60 overflow-y-auto">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="text-neutral-400">
+                      <th className="text-left">Variable</th>
+                      <th>PC1</th>
+                      <th>PC2</th>
+                      {is3D && <th>PC3</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.loadings.map((l) => (
+                      <tr key={l.name} className="border-t border-neutral-100 dark:border-neutral-800">
+                        <td className="py-1">{l.name}</td>
+                        <td className="text-center">{l.x.toFixed(3)}</td>
+                        <td className="text-center">{l.y.toFixed(3)}</td>
+                        {is3D && <td className="text-center">{l.z.toFixed(3)}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed font-sans">
+              Drag a rectangle in the Scatter tool — those rows highlight here too.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-neutral-500 dark:text-neutral-400 font-sans">
+            Drop a CSV or load an example with at least 2 numeric columns. PCA explains which
+            combinations of variables capture the most variation.
+          </p>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Tabs tabs={["Biplot"]} active={tab} onChange={setTab} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-        <Panel>
+      <div className={isFullscreen ? "" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}>
+        <div className={isFullscreen ? "fixed inset-0 z-50 bg-neutral-50 dark:bg-[#07070a] p-4 flex flex-col h-screen" : "lg:col-span-2"}>
+          <Panel className={`relative p-0 overflow-hidden bg-white dark:bg-[#07070a] border-neutral-200 dark:border-neutral-800 flex-1 flex flex-col ${isFullscreen ? "h-full" : ""}`}>
+            {is3D && (
+              <div className="absolute top-4 left-4 z-10 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="bg-white/90 hover:bg-neutral-100 dark:bg-neutral-900/90 dark:hover:bg-neutral-800 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 transition-all shadow-lg pointer-events-auto"
+                >
+                  {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-indigo-500" /> : <Maximize2 className="w-3.5 h-3.5 text-indigo-500" />}
+                  {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                </button>
+              </div>
+            )}
+            
+            {isFullscreen && (
+              <div className="absolute top-4 right-4 z-20 w-80 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border border-neutral-200 dark:border-neutral-800 p-4 rounded-xl shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
+                <div className="flex justify-between items-center border-b border-neutral-200 dark:border-neutral-800 pb-2">
+                  <span className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400">Floating controls</span>
+                  <button 
+                    onClick={() => setIsFullscreen(false)} 
+                    className="text-[10px] text-indigo-405 hover:underline"
+                  >
+                    Exit FS
+                  </button>
+                </div>
+                {renderControls()}
+              </div>
+            )}
+
             <svg
               viewBox={`0 0 ${W} ${H}`}
-              className={`w-full h-auto select-none ${is3D ? "cursor-move" : ""}`}
-              style={{ touchAction: "none" }}
+              className={`w-full h-auto select-none ${is3D ? "cursor-move" : ""} ${isFullscreen ? "flex-1" : ""}`}
+              style={{ touchAction: "none", height: isFullscreen ? "100%" : "auto" }}
               onPointerDown={is3D ? handlePointerDown : undefined}
               onPointerMove={is3D ? handlePointerMove : undefined}
               onPointerUp={is3D ? handlePointerUp : undefined}
@@ -502,70 +601,11 @@ export default function PCATool() {
           </Panel>
         </div>
 
-        <Panel className="space-y-5">
-          <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer font-medium border-b border-neutral-100 dark:border-neutral-800 pb-2">
-            <input
-              type="checkbox" checked={is3D}
-              onChange={(e) => setIs3D(e.target.checked)}
-              className="rounded text-indigo-600"
-            />
-            3D Biplot (PC1 / PC2 / PC3)
-          </label>
-
-          <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
-            <input type="checkbox" checked={scaleVars} onChange={(e) => setScaleVars(e.target.checked)} />
-            Standardize variables (z-score)
-          </label>
-          {result ? (
-            <>
-              <Stat label="Observations" value={String(result.n)} />
-              <Stat label="Variables"    value={String(result.k)} />
-              <Stat label="PC1 variance" value={`${((result.var1 / result.totalVar) * 100).toFixed(1)}%`}
-                sub={`λ₁ = ${result.var1.toFixed(3)}`} />
-              <Stat label="PC2 variance" value={`${((result.var2 / result.totalVar) * 100).toFixed(1)}%`}
-                sub={`λ₂ = ${result.var2.toFixed(3)}`} />
-              {is3D && (
-                <Stat label="PC3 variance" value={`${((result.var3 / result.totalVar) * 100).toFixed(1)}%`}
-                  sub={`λ₃ = ${result.var3.toFixed(3)}`} />
-              )}
-              <Stat label="Cumulative" value={`${(((result.var1 + result.var2 + (is3D ? result.var3 : 0)) / result.totalVar) * 100).toFixed(1)}%`} />
-              
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-2">Loadings</div>
-                <div className="max-h-60 overflow-y-auto">
-                  <table className="w-full text-xs font-mono">
-                    <thead>
-                      <tr className="text-neutral-400">
-                        <th className="text-left">Variable</th>
-                        <th>PC1</th>
-                        <th>PC2</th>
-                        {is3D && <th>PC3</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.loadings.map((l) => (
-                        <tr key={l.name} className="border-t border-neutral-100 dark:border-neutral-800">
-                          <td className="py-1">{l.name}</td>
-                          <td className="text-center">{l.x.toFixed(3)}</td>
-                          <td className="text-center">{l.y.toFixed(3)}</td>
-                          {is3D && <td className="text-center">{l.z.toFixed(3)}</td>}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                Drag a rectangle in the Scatter tool — those rows highlight here too.
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              Drop a CSV or load an example with at least 2 numeric columns. PCA explains which
-              combinations of variables capture the most variation.
-            </p>
-          )}
-        </Panel>
+        {!isFullscreen && (
+          <Panel className="space-y-5">
+            {renderControls()}
+          </Panel>
+        )}
       </div>
     </div>
   );

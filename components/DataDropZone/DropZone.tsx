@@ -41,10 +41,10 @@ export function DropZone({
   loadExample,
 }: Props) {
   return (
-    <div className="space-y-3 relative overflow-visible">
+    <div className="space-y-4 relative overflow-visible">
       {/* Subtle Aura/Lighting surrounding the DropZone card */}
       <div 
-        className="absolute top-1/2 left-1/2 w-[350px] h-[300px] sm:w-[780px] sm:h-[350px] pointer-events-none z-0 overflow-visible transition-all duration-300"
+        className="absolute top-[180px] left-1/2 w-[350px] h-[300px] sm:w-[780px] sm:h-[350px] pointer-events-none z-0 overflow-visible transition-all duration-300"
         style={{
           transform: `translate(-50%, -50%) scale(${dragOver ? 1.12 : 1})`
         }}
@@ -112,10 +112,10 @@ export function DropZone({
               <span className="text-neutral-400 dark:text-neutral-500 font-medium">Or try:</span>
               {(["iris", "heights", "abtest"] as const).map((ex) => (
                 <button
-                  key={ex}
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); loadExample(ex); }}
-                  className="text-neutral-600 dark:text-neutral-400 hover:text-orange-500 dark:hover:text-orange-400 font-semibold underline underline-offset-2 transition-colors px-0.5 capitalize"
+                   key={ex}
+                   type="button"
+                   onClick={(e) => { e.stopPropagation(); loadExample(ex); }}
+                   className="text-neutral-600 dark:text-neutral-400 hover:text-orange-500 dark:hover:text-orange-400 font-semibold underline underline-offset-2 transition-colors px-0.5 capitalize"
                 >
                   {ex === "abtest" ? "A/B Test" : ex.charAt(0).toUpperCase() + ex.slice(1)}
                 </button>
@@ -176,6 +176,24 @@ export function DropZone({
           {parseError}
         </div>
       )}
+
+      {/* ── Private Trust & Quick Paste Banner ───────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/20 dark:bg-neutral-900/20 text-xs text-neutral-500 dark:text-neutral-450 relative z-10">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span><strong>100% Private &amp; Secure:</strong> Raw data is parsed in-memory and never sent to any server.</span>
+        </div>
+        <div className="flex items-center gap-1.5 font-mono text-[10px] text-neutral-400">
+          <kbd className="px-1.5 py-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm text-neutral-600 dark:text-neutral-400">
+            Cmd
+          </kbd>
+          <span>+</span>
+          <kbd className="px-1.5 py-0.5 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm text-neutral-600 dark:text-neutral-400">
+            V
+          </kbd>
+          <span>to paste anywhere</span>
+        </div>
     </div>
-  );
+  </div>
+);
 }

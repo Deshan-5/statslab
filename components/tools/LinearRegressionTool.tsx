@@ -22,6 +22,7 @@ import {
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
+import { Minimize2, Maximize2 } from "lucide-react";
 
 const VIEW_W = 560,
   VIEW_H = 380,
@@ -279,6 +280,7 @@ export default function LinearRegressionTool() {
 
   // 3D Multiple Regression States
   const [is3D, setIs3D] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [x2Col, setX2Col] = useState<string | null>(null);
   const [yaw, setYaw] = useState(0.6);
   const [pitch, setPitch] = useState(0.3);
@@ -827,6 +829,244 @@ export default function LinearRegressionTool() {
     return null;
   };
 
+  const renderControls = () => {
+    return (
+      <div className="space-y-4">
+        <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer font-medium border-b border-neutral-100 dark:border-neutral-800 pb-2">
+          <input
+            type="checkbox" checked={is3D}
+            onChange={(e) => {
+              const val = e.target.checked;
+              setIs3D(val);
+              setTab(dataset ? "Workspace" : "Interactive");
+            }}
+            className="rounded text-indigo-600"
+          />
+          3D Multiple Regression
+        </label>
+
+        {tab === "Workspace" && dataset && (
+          <>
+            {!is3D ? (
+              <>
+                <ColumnPicker label="X column" value={xCol} onChange={setXCol} />
+                <ColumnPicker label="Y column" value={yCol} onChange={setYCol} />
+              </>
+            ) : (
+              <>
+                <ColumnPicker label="X₁ column (Predictor 1)" value={xCol} onChange={setXCol} />
+                <ColumnPicker label="X₂ column (Predictor 2)" value={x2Col} onChange={setX2Col} />
+                <ColumnPicker label="Y column (Dependent)" value={yCol} onChange={setYCol} />
+              </>
+            )}
+            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              Selected rows from Scatter highlight here automatically.
+            </p>
+          </>
+        )}
+
+        {tab === "Interactive" && (
+          <>
+            {!is3D ? (
+              <>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <NumberInput label="X" value={Number(newX) || 0} onChange={(v) => setNewX(String(v))} step={0.1} />
+                  </div>
+                  <div className="flex-1">
+                    <NumberInput label="Y" value={Number(newY) || 0} onChange={(v) => setNewY(String(v))} step={0.1} />
+                  </div>
+                </div>
+                <Btn onClick={addPoint}>Add point</Btn>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <NumberInput label="X₁" value={Number(newX) || 0} onChange={(v) => setNewX(String(v))} step={0.1} />
+                  </div>
+                  <div>
+                    <NumberInput label="X₂" value={Number(newX2) || 0} onChange={(v) => setNewX2(String(v))} step={0.1} />
+                  </div>
+                  <div>
+                    <NumberInput label="Y" value={Number(newY) || 0} onChange={(v) => setNewY(String(v))} step={0.1} />
+                  </div>
+                </div>
+                <Btn onClick={addPoint3D}>Add point</Btn>
+              </>
+            )}
+
+            {/* Points table */}
+            <div className="max-h-40 overflow-y-auto font-sans">
+              <table className="w-full text-xs font-mono">
+                <thead>
+                  <tr className="text-neutral-500 uppercase tracking-wider">
+                    <th className="text-left py-1">#</th>
+                    <th className="text-right py-1">{!is3D ? "X" : "X₁"}</th>
+                    {is3D && <th className="text-right py-1">X₂</th>}
+                    <th className="text-right py-1">Y</th>
+                    <th className="text-right py-1"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!is3D ? (
+                    points.map((p, i) => (
+                      <tr key={i} className="border-t border-neutral-100 dark:border-neutral-800">
+                        <td className="py-1 text-neutral-400">{i + 1}</td>
+                        <td className="py-1 text-right">{p.x.toFixed(2)}</td>
+                        <td className="py-1 text-right">{p.y.toFixed(2)}</td>
+                        <td className="py-1 text-right">
+                          <button onClick={() => removePoint(i)} className="text-red-400 hover:text-red-650">×</button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    points3D.map((p, i) => (
+                      <tr key={i} className="border-t border-neutral-100 dark:border-neutral-800">
+                        <td className="py-1 text-neutral-400">{i + 1}</td>
+                        <td className="py-1 text-right">{p.x1.toFixed(2)}</td>
+                        <td className="py-1 text-right">{p.x2.toFixed(2)}</td>
+                        <td className="py-1 text-right">{p.y.toFixed(2)}</td>
+                        <td className="py-1 text-right">
+                          <button onClick={() => removePoint3D(i)} className="text-red-400 hover:text-red-650">×</button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <Btn onClick={() => {!is3D ? setPoints([]) : setPoints3D([])}}>Clear all</Btn>
+          </>
+        )}
+
+        {tab === "Data Input" && (
+          <>
+            {!is3D ? (
+              <>
+                <DataTextArea
+                  label="X, Y pairs (one per line)"
+                  value={rawData}
+                  onChange={setRawData}
+                  placeholder="1.0, 1.6&#10;2.0, 2.3&#10;3.0, 3.1"
+                  rows={5}
+                />
+                <SampleDataButton onClick={() => setRawData(SAMPLE_DATA)} />
+                {rawData && !parsedPairs && (
+                  <div className="text-xs text-red-500">Could not parse data. Use &ldquo;x, y&rdquo; per line.</div>
+                )}
+              </>
+            ) : (
+              <>
+                <DataTextArea
+                  label="X₁, X₂, Y triplets (one per line)"
+                  value={rawData3D}
+                  onChange={setRawData3D}
+                  placeholder="1.0, 2.0, 3.5&#10;1.5, 2.5, 4.2&#10;2.0, 1.8, 5.1"
+                  rows={5}
+                />
+                <SampleDataButton onClick={() => setRawData3D(SAMPLE_DATA_3D)} />
+                {rawData3D && !parsedTriplets && (
+                  <div className="text-xs text-red-500">Could not parse data. Use &ldquo;x1, x2, y&rdquo; per line.</div>
+                )}
+              </>
+            )}
+          </>
+        )}
+
+        <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer">
+          <input
+            type="checkbox" checked={showResiduals}
+            onChange={(e) => setShowResiduals(e.target.checked)}
+            className="rounded"
+          />
+          Show residuals
+        </label>
+
+        {/* Results */}
+        {!is3D && reg && (
+          <>
+            <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3 font-sans">
+              <Stat label="Slope (β₁)" value={reg.slope.toFixed(6)} sub={`SE = ${reg.slopeStdErr.toFixed(4)}, p = ${reg.pSlope.toFixed(4)}`} />
+              <Stat label="Intercept (β₀)" value={reg.intercept.toFixed(6)} sub={`SE = ${reg.interceptStdErr.toFixed(4)}, p = ${reg.pIntercept.toFixed(4)}`} />
+              <Stat label="R²" value={reg.r2.toFixed(6)} />
+              <Stat label="Adjusted R²" value={reg.adjR2.toFixed(6)} />
+              <Stat label="n" value={String(activePoints.length)} />
+            </div>
+
+            <Formula text={`ŷ = ${reg.intercept.toFixed(4)} + ${reg.slope.toFixed(4)} · x`} />
+
+            <StepByStep steps={[
+              { label: "x̄", value: mean(xs).toFixed(4) },
+              { label: "ȳ", value: mean(ys).toFixed(4) },
+              { label: "Σ(xᵢ−x̄)(yᵢ−ȳ)", value: xs.reduce((s, x, i) => s + (x - mean(xs)) * (ys[i] - mean(ys)), 0).toFixed(4) },
+              { label: "Σ(xᵢ−x̄)²", value: xs.reduce((s, x) => s + (x - mean(xs)) ** 2, 0).toFixed(4) },
+              { label: "β₁ = Σxy / Σx²", value: reg.slope.toFixed(6) },
+              { label: "β₀ = ȳ − β₁x̄", value: reg.intercept.toFixed(6) },
+              { label: "SS_tot", value: ys.reduce((s, y) => s + (y - mean(ys)) ** 2, 0).toFixed(4) },
+              { label: "SS_res", value: reg.residuals.reduce((s, r) => s + r * r, 0).toFixed(4) },
+              { label: "R² = 1 − SS_res/SS_tot", value: reg.r2.toFixed(6) },
+            ]} />
+          </>
+        )}
+
+        {is3D && reg3D && (
+          <>
+            <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3 font-sans">
+              <Stat label="Intercept (β₀)" value={reg3D.b0.toFixed(6)} sub={`SE = ${reg3D.seB0.toFixed(4)}, p = ${reg3D.pB0.toFixed(4)}`} />
+              <Stat label="Slope 1 (β₁)" value={reg3D.b1.toFixed(6)} sub={`SE = ${reg3D.seB1.toFixed(4)}, p = ${reg3D.pB1.toFixed(4)}`} />
+              <Stat label="Slope 2 (β₂)" value={reg3D.b2.toFixed(6)} sub={`SE = ${reg3D.seB2.toFixed(4)}, p = ${reg3D.pB2.toFixed(4)}`} />
+              <Stat label="R²" value={reg3D.r2.toFixed(6)} />
+              <Stat label="Adjusted R²" value={reg3D.adjR2.toFixed(6)} />
+              <Stat label="n" value={String(activePoints3D.length)} />
+            </div>
+
+            <Formula text={`ŷ = ${reg3D.b0.toFixed(4)} + ${reg3D.b1.toFixed(4)} · x₁ + ${reg3D.b2.toFixed(4)} · x₂`} />
+
+            <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-2 space-y-1 font-sans">
+              <div>Model: <strong>Y = β₀ + β₁X₁ + β₂X₂</strong></div>
+              <div>Residual SE: <strong>{Math.sqrt(reg3D.residuals.reduce((s, r) => s + r * r, 0) / reg3D.df).toFixed(4)}</strong> on {reg3D.df} DF</div>
+            </div>
+          </>
+        )}
+
+        {/* Prediction */}
+        {!is3D && reg && (
+          <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3 font-sans">
+            <div className="text-xs uppercase tracking-wider text-neutral-500 font-medium">Prediction</div>
+            <NumberInput label="Enter x" value={predXNum || 0} onChange={(v) => setPredictX(String(v))} step={0.1} />
+            {prediction && (
+              <>
+                <Stat label="ŷ" value={prediction.yhat.toFixed(4)} />
+                <Stat label="95% PI" value={`[${(prediction.yhat - 1.96 * prediction.se).toFixed(4)}, ${(prediction.yhat + 1.96 * prediction.se).toFixed(4)}]`} />
+              </>
+            )}
+          </div>
+        )}
+
+        {is3D && reg3D && (
+          <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3 font-sans">
+            <div className="text-xs uppercase tracking-wider text-neutral-500 font-medium">Prediction</div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <NumberInput label="Enter x₁" value={predX1Num || 0} onChange={(v) => setPredictX1(String(v))} step={0.1} />
+              </div>
+              <div className="flex-1">
+                <NumberInput label="Enter x₂" value={predX2Num || 0} onChange={(v) => setPredictX2(String(v))} step={0.1} />
+              </div>
+            </div>
+            {prediction3D && (
+              <>
+                <Stat label="ŷ" value={prediction3D.yhat.toFixed(4)} />
+                <Stat label="95% PI" value={`[${(prediction3D.yhat - 1.96 * prediction3D.se).toFixed(4)}, ${(prediction3D.yhat + 1.96 * prediction3D.se).toFixed(4)}]`} />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <Tabs
@@ -835,14 +1075,42 @@ export default function LinearRegressionTool() {
       />
 
       {/* Main scatter plot / 3D Canvas */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
-          <Panel>
+      <div className={isFullscreen ? "" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}>
+        <div className={isFullscreen ? "fixed inset-0 z-50 bg-neutral-50 dark:bg-[#07070a] p-4 flex flex-col h-screen" : "lg:col-span-2 space-y-4"}>
+          <Panel className={`relative p-0 overflow-hidden bg-white dark:bg-[#07070a] border-neutral-200 dark:border-neutral-800 flex-1 flex flex-col ${isFullscreen ? "h-full" : ""}`}>
+            {is3D && (
+              <div className="absolute top-4 left-4 z-10 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="bg-white/90 hover:bg-neutral-100 dark:bg-neutral-900/90 dark:hover:bg-neutral-800 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 transition-all shadow-lg pointer-events-auto"
+                >
+                  {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-indigo-500" /> : <Maximize2 className="w-3.5 h-3.5 text-indigo-500" />}
+                  {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                </button>
+              </div>
+            )}
+            
+            {isFullscreen && (
+              <div className="absolute top-4 right-4 z-20 w-80 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border border-neutral-200 dark:border-neutral-800 p-4 rounded-xl shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
+                <div className="flex justify-between items-center border-b border-neutral-200 dark:border-neutral-800 pb-2">
+                  <span className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400">Floating controls</span>
+                  <button 
+                    onClick={() => setIsFullscreen(false)} 
+                    className="text-[10px] text-indigo-405 hover:underline"
+                  >
+                    Exit FS
+                  </button>
+                </div>
+                {renderControls()}
+              </div>
+            )}
+
             <svg
               ref={svgRef}
               viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-              className={`w-full h-auto select-none ${is3D ? "cursor-move" : ""}`}
-              style={{ touchAction: "none" }}
+              className={`w-full h-auto select-none ${is3D ? "cursor-move" : ""} ${isFullscreen ? "flex-1" : ""}`}
+              style={{ touchAction: "none", height: isFullscreen ? "100%" : "auto" }}
               onPointerDown={is3D ? handlePointerDown : undefined}
               onPointerMove={is3D ? handlePointerMove : (e) => {
                 if (dragging === null || tab !== "Interactive") return;
@@ -1193,241 +1461,13 @@ export default function LinearRegressionTool() {
         </div>
 
         {/* Controls panel */}
-        <div>
-          <Panel className="space-y-4">
-            <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer font-medium border-b border-neutral-100 dark:border-neutral-800 pb-2">
-              <input
-                type="checkbox" checked={is3D}
-                onChange={(e) => {
-                  const val = e.target.checked;
-                  setIs3D(val);
-                  setTab(dataset ? "Workspace" : "Interactive");
-                }}
-                className="rounded text-indigo-600"
-              />
-              3D Multiple Regression
-            </label>
-
-            {tab === "Workspace" && dataset && (
-              <>
-                {!is3D ? (
-                  <>
-                    <ColumnPicker label="X column" value={xCol} onChange={setXCol} />
-                    <ColumnPicker label="Y column" value={yCol} onChange={setYCol} />
-                  </>
-                ) : (
-                  <>
-                    <ColumnPicker label="X₁ column (Predictor 1)" value={xCol} onChange={setXCol} />
-                    <ColumnPicker label="X₂ column (Predictor 2)" value={x2Col} onChange={setX2Col} />
-                    <ColumnPicker label="Y column (Dependent)" value={yCol} onChange={setYCol} />
-                  </>
-                )}
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  Selected rows from Scatter highlight here automatically.
-                </p>
-              </>
-            )}
-
-            {tab === "Interactive" && (
-              <>
-                {!is3D ? (
-                  <>
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <NumberInput label="X" value={Number(newX) || 0} onChange={(v) => setNewX(String(v))} step={0.1} />
-                      </div>
-                      <div className="flex-1">
-                        <NumberInput label="Y" value={Number(newY) || 0} onChange={(v) => setNewY(String(v))} step={0.1} />
-                      </div>
-                    </div>
-                    <Btn onClick={addPoint}>Add point</Btn>
-                  </>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <NumberInput label="X₁" value={Number(newX) || 0} onChange={(v) => setNewX(String(v))} step={0.1} />
-                      </div>
-                      <div>
-                        <NumberInput label="X₂" value={Number(newX2) || 0} onChange={(v) => setNewX2(String(v))} step={0.1} />
-                      </div>
-                      <div>
-                        <NumberInput label="Y" value={Number(newY) || 0} onChange={(v) => setNewY(String(v))} step={0.1} />
-                      </div>
-                    </div>
-                    <Btn onClick={addPoint3D}>Add point</Btn>
-                  </>
-                )}
-
-                {/* Points table */}
-                <div className="max-h-40 overflow-y-auto">
-                  <table className="w-full text-xs font-mono">
-                    <thead>
-                      <tr className="text-neutral-500 uppercase tracking-wider">
-                        <th className="text-left py-1">#</th>
-                        <th className="text-right py-1">{!is3D ? "X" : "X₁"}</th>
-                        {is3D && <th className="text-right py-1">X₂</th>}
-                        <th className="text-right py-1">Y</th>
-                        <th className="text-right py-1"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!is3D ? (
-                        points.map((p, i) => (
-                          <tr key={i} className="border-t border-neutral-100 dark:border-neutral-800">
-                            <td className="py-1 text-neutral-400">{i + 1}</td>
-                            <td className="py-1 text-right">{p.x.toFixed(2)}</td>
-                            <td className="py-1 text-right">{p.y.toFixed(2)}</td>
-                            <td className="py-1 text-right">
-                              <button onClick={() => removePoint(i)} className="text-red-400 hover:text-red-600">×</button>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        points3D.map((p, i) => (
-                          <tr key={i} className="border-t border-neutral-100 dark:border-neutral-800">
-                            <td className="py-1 text-neutral-400">{i + 1}</td>
-                            <td className="py-1 text-right">{p.x1.toFixed(2)}</td>
-                            <td className="py-1 text-right">{p.x2.toFixed(2)}</td>
-                            <td className="py-1 text-right">{p.y.toFixed(2)}</td>
-                            <td className="py-1 text-right">
-                              <button onClick={() => removePoint3D(i)} className="text-red-400 hover:text-red-600">×</button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-                <Btn onClick={() => {!is3D ? setPoints([]) : setPoints3D([])}}>Clear all</Btn>
-              </>
-            )}
-
-            {tab === "Data Input" && (
-              <>
-                {!is3D ? (
-                  <>
-                    <DataTextArea
-                      label="X, Y pairs (one per line)"
-                      value={rawData}
-                      onChange={setRawData}
-                      placeholder="1.0, 1.6&#10;2.0, 2.3&#10;3.0, 3.1"
-                      rows={5}
-                    />
-                    <SampleDataButton onClick={() => setRawData(SAMPLE_DATA)} />
-                    {rawData && !parsedPairs && (
-                      <div className="text-xs text-red-500">Could not parse data. Use &ldquo;x, y&rdquo; per line.</div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <DataTextArea
-                      label="X₁, X₂, Y triplets (one per line)"
-                      value={rawData3D}
-                      onChange={setRawData3D}
-                      placeholder="1.0, 2.0, 3.5&#10;1.5, 2.5, 4.2&#10;2.0, 1.8, 5.1"
-                      rows={5}
-                    />
-                    <SampleDataButton onClick={() => setRawData3D(SAMPLE_DATA_3D)} />
-                    {rawData3D && !parsedTriplets && (
-                      <div className="text-xs text-red-500">Could not parse data. Use &ldquo;x1, x2, y&rdquo; per line.</div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer">
-              <input
-                type="checkbox" checked={showResiduals}
-                onChange={(e) => setShowResiduals(e.target.checked)}
-                className="rounded"
-              />
-              Show residuals
-            </label>
-
-            {/* Results */}
-            {!is3D && reg && (
-              <>
-                <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3">
-                  <Stat label="Slope (β₁)" value={reg.slope.toFixed(6)} sub={`SE = ${reg.slopeStdErr.toFixed(4)}, p = ${reg.pSlope.toFixed(4)}`} />
-                  <Stat label="Intercept (β₀)" value={reg.intercept.toFixed(6)} sub={`SE = ${reg.interceptStdErr.toFixed(4)}, p = ${reg.pIntercept.toFixed(4)}`} />
-                  <Stat label="R²" value={reg.r2.toFixed(6)} />
-                  <Stat label="Adjusted R²" value={reg.adjR2.toFixed(6)} />
-                  <Stat label="n" value={String(activePoints.length)} />
-                </div>
-
-                <Formula text={`ŷ = ${reg.intercept.toFixed(4)} + ${reg.slope.toFixed(4)} · x`} />
-
-                <StepByStep steps={[
-                  { label: "x̄", value: mean(xs).toFixed(4) },
-                  { label: "ȳ", value: mean(ys).toFixed(4) },
-                  { label: "Σ(xᵢ−x̄)(yᵢ−ȳ)", value: xs.reduce((s, x, i) => s + (x - mean(xs)) * (ys[i] - mean(ys)), 0).toFixed(4) },
-                  { label: "Σ(xᵢ−x̄)²", value: xs.reduce((s, x) => s + (x - mean(xs)) ** 2, 0).toFixed(4) },
-                  { label: "β₁ = Σxy / Σx²", value: reg.slope.toFixed(6) },
-                  { label: "β₀ = ȳ − β₁x̄", value: reg.intercept.toFixed(6) },
-                  { label: "SS_tot", value: ys.reduce((s, y) => s + (y - mean(ys)) ** 2, 0).toFixed(4) },
-                  { label: "SS_res", value: reg.residuals.reduce((s, r) => s + r * r, 0).toFixed(4) },
-                  { label: "R² = 1 − SS_res/SS_tot", value: reg.r2.toFixed(6) },
-                ]} />
-              </>
-            )}
-
-            {is3D && reg3D && (
-              <>
-                <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3">
-                  <Stat label="Intercept (β₀)" value={reg3D.b0.toFixed(6)} sub={`SE = ${reg3D.seB0.toFixed(4)}, p = ${reg3D.pB0.toFixed(4)}`} />
-                  <Stat label="Slope 1 (β₁)" value={reg3D.b1.toFixed(6)} sub={`SE = ${reg3D.seB1.toFixed(4)}, p = ${reg3D.pB1.toFixed(4)}`} />
-                  <Stat label="Slope 2 (β₂)" value={reg3D.b2.toFixed(6)} sub={`SE = ${reg3D.seB2.toFixed(4)}, p = ${reg3D.pB2.toFixed(4)}`} />
-                  <Stat label="R²" value={reg3D.r2.toFixed(6)} />
-                  <Stat label="Adjusted R²" value={reg3D.adjR2.toFixed(6)} />
-                  <Stat label="n" value={String(activePoints3D.length)} />
-                </div>
-
-                <Formula text={`ŷ = ${reg3D.b0.toFixed(4)} + ${reg3D.b1.toFixed(4)} · x₁ + ${reg3D.b2.toFixed(4)} · x₂`} />
-
-                <div className="text-xs text-neutral-500 dark:text-neutral-400 mt-2 space-y-1">
-                  <div>Model: <strong>Y = β₀ + β₁X₁ + β₂X₂</strong></div>
-                  <div>Residual SE: <strong>{Math.sqrt(reg3D.residuals.reduce((s, r) => s + r * r, 0) / reg3D.df).toFixed(4)}</strong> on {reg3D.df} DF</div>
-                </div>
-              </>
-            )}
-
-            {/* Prediction */}
-            {!is3D && reg && (
-              <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3">
-                <div className="text-xs uppercase tracking-wider text-neutral-500 font-medium">Prediction</div>
-                <NumberInput label="Enter x" value={predXNum || 0} onChange={(v) => setPredictX(String(v))} step={0.1} />
-                {prediction && (
-                  <>
-                    <Stat label="ŷ" value={prediction.yhat.toFixed(4)} />
-                    <Stat label="95% PI" value={`[${(prediction.yhat - 1.96 * prediction.se).toFixed(4)}, ${(prediction.yhat + 1.96 * prediction.se).toFixed(4)}]`} />
-                  </>
-                )}
-              </div>
-            )}
-
-            {is3D && reg3D && (
-              <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-3">
-                <div className="text-xs uppercase tracking-wider text-neutral-500 font-medium font-sans">Prediction</div>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <NumberInput label="Enter x₁" value={predX1Num || 0} onChange={(v) => setPredictX1(String(v))} step={0.1} />
-                  </div>
-                  <div className="flex-1">
-                    <NumberInput label="Enter x₂" value={predX2Num || 0} onChange={(v) => setPredictX2(String(v))} step={0.1} />
-                  </div>
-                </div>
-                {prediction3D && (
-                  <>
-                    <Stat label="ŷ" value={prediction3D.yhat.toFixed(4)} />
-                    <Stat label="95% PI" value={`[${(prediction3D.yhat - 1.96 * prediction3D.se).toFixed(4)}, ${(prediction3D.yhat + 1.96 * prediction3D.se).toFixed(4)}]`} />
-                  </>
-                )}
-              </div>
-            )}
-          </Panel>
-        </div>
+        {!isFullscreen && (
+          <div>
+            <Panel className="space-y-4">
+              {renderControls()}
+            </Panel>
+          </div>
+        )}
       </div>
     </div>
   );

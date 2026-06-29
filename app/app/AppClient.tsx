@@ -146,7 +146,7 @@ export default function AppClient() {
       <div className={`flex flex-col h-screen bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 ${(isDraggingSidebar || isDraggingTutor) ? 'select-none cursor-col-resize' : ''}`}>
         <CommandPalette />
 
-        <header className="sticky top-0 z-30 bg-white/85 dark:bg-neutral-950/85 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800">
+        <header className="sticky top-0 z-30 bg-white/85 dark:bg-neutral-950/85 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 print:hidden">
           <div className="h-14 px-4 md:px-6 flex items-center gap-2">
             {/* LEFT: Logo + Undo + Dataset */}
             <div className="flex items-center gap-2 min-w-0 shrink-0">
@@ -213,7 +213,7 @@ export default function AppClient() {
 
         {/* Browser-like Tab Bar */}
         {tabs.length > 0 && (
-          <div className="shrink-0 h-11 bg-neutral-50 dark:bg-neutral-900/40 border-b border-neutral-200 dark:border-neutral-800 flex items-center px-4 overflow-x-auto scrollbar-none gap-1 select-none">
+          <div className="shrink-0 h-11 bg-neutral-50 dark:bg-neutral-900/40 border-b border-neutral-200 dark:border-neutral-800 flex items-center px-4 overflow-x-auto scrollbar-none gap-1 select-none print:hidden">
             {tabs.map((t) => {
               const Icon = GROUP_ICONS[t.group] || Layers;
               return (
@@ -264,7 +264,7 @@ export default function AppClient() {
 
           {/* Phase 1: Activity Bar + Sidebar */}
           <aside
-            className={`relative flex shrink-0 h-full border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 z-20 ${
+            className={`relative flex shrink-0 h-full border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 z-20 print:hidden ${
               isDraggingSidebar ? "" : "transition-all duration-300"
             } ${navOpen ? "absolute inset-0 w-full" : "hidden md:flex"}`}
             style={{ width: typeof window !== "undefined" && window.innerWidth >= 768 ? (sidebarCollapsed ? 48 : sidebarWidth + 48) : undefined }}
@@ -578,7 +578,7 @@ function TutorPanel({
     <div
       className={[
         // always-on structural classes
-        "flex flex-col shrink-0",
+        "flex flex-col shrink-0 print:hidden",
         "bg-white dark:bg-neutral-950",
         "overflow-hidden",
         "transition-[width,border-color] duration-300 ease-in-out",

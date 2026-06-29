@@ -207,11 +207,23 @@ export default function EmbeddingsTool() {
     const w0 = containerRef.current.clientWidth;
     const h0 = containerRef.current.clientHeight || 460;
 
-    const scene = new THREE.Scene();
+        const scene = new THREE.Scene();
     const bgColor = isDk() ? "#07070a" : "#f8fafc";
     scene.background = new THREE.Color(bgColor);
     scene.fog = new THREE.FogExp2(bgColor, 0.011);
     sceneRef.current = scene;
+
+    // Add ambient and directional lights for physical materials
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.5);
+    dirLight1.position.set(20, 40, 20);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight2.position.set(-20, -40, -20);
+    scene.add(dirLight2);
 
     const camera = new THREE.PerspectiveCamera(60, w0 / h0, 0.1, 1000);
     camera.position.set(0, 5, 52);
@@ -249,15 +261,19 @@ export default function EmbeddingsTool() {
     scene.add(grid);
     gridRef.current = grid;
 
-    // Cluster wireframe halos — colored cages showing cluster boundaries
+    // Cluster glassmorphic halos — physical glass-like spheres
     haloMeshesRef.current = [];
     CLUSTERS.forEach(c => {
-      const hGeo = new THREE.SphereGeometry(c.radius + 1.5, 10, 7);
-      const hMat = new THREE.MeshBasicMaterial({
+      const hGeo = new THREE.SphereGeometry(c.radius + 1.5, 20, 20);
+      const hMat = new THREE.MeshPhysicalMaterial({
         color: new THREE.Color(c.color),
-        wireframe: true,
         transparent: true,
-        opacity: isDk() ? 0.18 : 0.10,
+        opacity: isDk() ? 0.35 : 0.22,
+        roughness: 0.15,
+        metalness: 0.1,
+        transmission: 0.6, // Glass-like transparency
+        thickness: 1.5, // Thickness of the glass shell
+        depthWrite: false,
       });
       const halo = new THREE.Mesh(hGeo, hMat);
       halo.position.set(...c.centroid);
@@ -324,7 +340,7 @@ export default function EmbeddingsTool() {
 
     let flyAnim: {
       active: boolean; start: number; dur: number;
-      sp: THREE.Vector3; ep: THREE.Vector3;
+      curve: THREE.CatmullRomCurve3;
       sl: THREE.Vector3; el: THREE.Vector3;
     } | null = null;
 
@@ -355,12 +371,12 @@ export default function EmbeddingsTool() {
         starfield.rotation.y = t * 0.000022;
       }
 
-      // Fly animation (cubic ease in-out)
+      // Fly animation (cubic ease in-out with curved path)
       if (flyAnim?.active) {
         const elapsed = (performance.now() - flyAnim.start) / 1000;
         const p = Math.min(elapsed / flyAnim.dur, 1);
         const ease = p < 0.5 ? 4 * p ** 3 : 1 - Math.pow(-2 * p + 2, 3) / 2;
-        camera.position.lerpVectors(flyAnim.sp, flyAnim.ep, ease);
+        flyAnim.curve.getPointAt(ease, camera.position);
         orbit.target.lerpVectors(flyAnim.sl, flyAnim.el, ease);
         orbit.update();
         if (p >= 1) { flyAnim = null; setIsFlying(false); setSolved(true); }
@@ -429,7 +445,22 @@ export default function EmbeddingsTool() {
       const ep = new THREE.Vector3(target.x + 5, target.y + 4, target.z + 13);
       const sl = orbit.target.clone();
       const el2 = new THREE.Vector3(target.x, target.y, target.z);
-      flyAnim = { active: true, start: performance.now(), dur: 3, sp, ep, sl, el: el2 };
+
+      // Create a curved path using a midpoint offset perpendicular to the line of sight
+      const midPoint = new THREE.Vector3().addVectors(sp, ep).multiplyScalar(0.5);
+      const dir = new THREE.Vector3().subVectors(ep, sp).normalize();
+      let upVec = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(dir.dot(upVec)) > 0.9) {
+        upVec.set(1, 0, 0);
+      }
+      const perpendicular = new THREE.Vector3().crossVectors(dir, upVec).normalize();
+      const distance = sp.distanceTo(ep);
+      const arcHeight = Math.min(distance * 0.25, 20); // Scale curve with distance, capped at 20 units
+      midPoint.addScaledVector(perpendicular, arcHeight);
+
+      const curve = new THREE.CatmullRomCurve3([sp, midPoint, ep]);
+
+      flyAnim = { active: true, start: performance.now(), dur: 3, curve, sl, el: el2 };
     };
 
     const onResize = () => {
@@ -466,8 +497,8 @@ export default function EmbeddingsTool() {
       m.needsUpdate = true;
     }
     haloMeshesRef.current.forEach(h => {
-      const m = h.material as THREE.MeshBasicMaterial;
-      m.opacity = dark ? 0.18 : 0.10;
+      const m = h.material as THREE.MeshPhysicalMaterial;
+      m.opacity = dark ? 0.35 : 0.22;
       m.needsUpdate = true;
     });
     if (gridRef.current) {

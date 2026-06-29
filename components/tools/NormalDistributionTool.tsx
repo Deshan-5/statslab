@@ -11,6 +11,7 @@ import {
 } from "./shared/ui";
 import { useWorkspace } from "@/components/workspace/WorkspaceProvider";
 import ColumnPicker from "@/components/workspace/ColumnPicker";
+import { Minimize2, Maximize2 } from "lucide-react";
 
 const W = 720, H = 320, PAD = 36;
 const VIEW3D_W = 560;
@@ -48,6 +49,7 @@ export default function NormalDistributionTool() {
 
   // 3D states
   const [is3D, setIs3D] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [muY, setMuY] = useState(0);
   const [sigmaY, setSigmaY] = useState(1);
   const [rho, setRho] = useState(0.5);
@@ -440,6 +442,134 @@ export default function NormalDistributionTool() {
     return sorted;
   }, [is3D, mu, muY, sigma, sigmaY, rho, yaw, pitch, maxDensity]);
 
+  const renderControls = () => {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800">
+          <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 font-sans">3D Bivariate Surface</span>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" className="sr-only peer" checked={is3D} onChange={(e) => setIs3D(e.target.checked)} />
+            <div className="w-11 h-6 bg-neutral-200 dark:bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 dark:after:bg-neutral-600 after:border-neutral-300 dark:after:border-neutral-800 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500 peer-checked:after:bg-white"></div>
+          </label>
+        </div>
+
+        {is3D ? (
+          <>
+            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200 dark:border-neutral-800/50 pb-1 mb-2 font-sans">Variable X Parameters</div>
+            <Field label="μX (mean X)" value={mu.toFixed(2)}>
+              <input type="range" min={-3} max={3} step={0.1} value={mu} onChange={(e) => setMu(Number(e.target.value))} className="w-full" />
+            </Field>
+            <NumberInput label="μX exact" value={mu} onChange={setMu} step={0.1} />
+            
+            <Field label="σX (std X)" value={sigma.toFixed(2)}>
+              <input type="range" min={0.3} max={2.5} step={0.1} value={sigma} onChange={(e) => setSigma(Number(e.target.value))} className="w-full" />
+            </Field>
+            <NumberInput label="σX exact" value={sigma} onChange={setSigma} step={0.1} min={0.01} />
+
+            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200 dark:border-neutral-800/50 pb-1 mt-4 mb-2 font-sans">Variable Y Parameters</div>
+            <Field label="μY (mean Y)" value={muY.toFixed(2)}>
+              <input type="range" min={-3} max={3} step={0.1} value={muY} onChange={(e) => setMuY(Number(e.target.value))} className="w-full" />
+            </Field>
+            <NumberInput label="μY exact" value={muY} onChange={setMuY} step={0.1} />
+
+            <Field label="σY (std Y)" value={sigmaY.toFixed(2)}>
+              <input type="range" min={0.3} max={2.5} step={0.1} value={sigmaY} onChange={(e) => setSigmaY(Number(e.target.value))} className="w-full" />
+            </Field>
+            <NumberInput label="σY exact" value={sigmaY} onChange={setSigmaY} step={0.1} min={0.01} />
+
+            <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200 dark:border-neutral-800/50 pb-1 mt-4 mb-2 font-sans">Relationship</div>
+            <Field label="ρ (correlation)" value={rho.toFixed(2)}>
+              <input type="range" min={-0.95} max={0.95} step={0.05} value={rho} onChange={(e) => setRho(Number(e.target.value))} className="w-full" />
+            </Field>
+            <NumberInput label="ρ exact" value={rho} onChange={setRho} step={0.05} min={-0.99} max={0.99} />
+
+            <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 space-y-2">
+              <Stat label="Covariance σXY" value={covariance.toFixed(4)} />
+              <Stat label="Peak Density" value={maxDensity.toFixed(4)} />
+            </div>
+          </>
+        ) : (
+          <>
+            <Field label="μ (mean)" value={mu.toFixed(2)}>
+              <input type="range" min={-5} max={5} step={0.1} value={mu} onChange={(e) => setMu(Number(e.target.value))} className="w-full" />
+            </Field>
+            <NumberInput label="μ exact" value={mu} onChange={setMu} step={0.1} />
+            <Field label="σ (std)" value={sigma.toFixed(2)}>
+              <input type="range" min={0.2} max={5} step={0.1} value={sigma} onChange={(e) => setSigma(Number(e.target.value))} className="w-full" />
+            </Field>
+            <NumberInput label="σ exact" value={sigma} onChange={setSigma} step={0.1} min={0.01} />
+
+            {tab === "Curve" && (
+              <>
+                <Stat label="Variance σ²" value={(sigma * sigma).toFixed(3)} />
+                <Stat label="68% interval" value={`[${(mu - sigma).toFixed(2)}, ${(mu + sigma).toFixed(2)}]`} />
+                <Stat label="95% interval" value={`[${(mu - 2 * sigma).toFixed(2)}, ${(mu + 2 * sigma).toFixed(2)}]`} />
+                <Stat label="99.7% interval" value={`[${(mu - 3 * sigma).toFixed(2)}, ${(mu + 3 * sigma).toFixed(2)}]`} />
+              </>
+            )}
+
+            {tab === "Probability" && (
+              <>
+                <Select label="Region" value={calcMode}
+                  onChange={(v) => setCalcMode(v as "lt" | "gt" | "between")}
+                  options={[
+                    { value: "lt", label: "P(X ≤ a)" },
+                    { value: "gt", label: "P(X ≥ a)" },
+                    { value: "between", label: "P(a ≤ X ≤ b)" },
+                  ]} />
+                <NumberInput label="a" value={aVal} onChange={setAVal} step={0.1} />
+                {calcMode === "between" && <NumberInput label="b" value={bVal} onChange={setBVal} step={0.1} />}
+                <Stat label="Probability" value={probability.toFixed(4)} sub={`${(probability * 100).toFixed(2)}%`} />
+                <Formula text={
+                  calcMode === "lt" ? `Φ((${aVal} − ${mu})/${sigma})` :
+                  calcMode === "gt" ? `1 − Φ((${aVal} − ${mu})/${sigma})` :
+                  `Φ((${bVal} − ${mu})/${sigma}) − Φ((${aVal} − ${mu})/${sigma})`
+                } />
+              </>
+            )}
+
+            {tab === "Z-Score" && (
+              <>
+                <NumberInput label="Raw value x" value={rawX} onChange={setRawX} step={0.1} />
+                <Stat label="z-score" value={z.toFixed(4)} />
+                <Stat label="Percentile" value={`${percentile.toFixed(2)}%`} />
+                <Formula text={`z = (x − μ) / σ = (${rawX} − ${mu}) / ${sigma}`} />
+                <div className="text-xs text-neutral-500 mt-2 font-sans">
+                  Inverse: at the {percentile.toFixed(0)}th percentile, x ≈ {(mu + normalInv(percentile / 100) * sigma).toFixed(2)}
+                </div>
+              </>
+            )}
+
+            {tab === "Data Overlay" && (
+              <>
+                {dataset && (
+                  <ColumnPicker label="Workspace column (optional)" value={valueCol} onChange={setValueCol} kind="numeric" autoPick={false} />
+                )}
+                {!(valueCol && wsData) && (
+                  <>
+                    <DataTextArea label="Data" value={rawData} onChange={setRawData}
+                      placeholder="62, 65, 68, …" rows={5} />
+                    <SampleDataButton onClick={() => setRawData(SAMPLE)} />
+                  </>
+                )}
+                {dataPts && dataPts.length >= 2 && (
+                  <>
+                    <Stat label="Sample n" value={`${dataPts.length}`} />
+                    <Stat label="Sample mean" value={mean(dataPts).toFixed(3)} sub={`vs μ = ${mu}`} />
+                    <Stat label="Sample SD"   value={sd(dataPts).toFixed(3)}   sub={`vs σ = ${sigma}`} />
+                    <Btn onClick={() => { setMu(Number(mean(dataPts).toFixed(2))); setSigma(Number(sd(dataPts).toFixed(2))); }}>
+                      Fit μ, σ to data
+                    </Btn>
+                  </>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {is3D ? (
@@ -456,13 +586,42 @@ export default function NormalDistributionTool() {
         <Tabs tabs={["Curve", "Probability", "Z-Score", "Data Overlay"]} active={tab} onChange={setTab} />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-        <Panel>
+      <div className={isFullscreen ? "" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}>
+        <div className={isFullscreen ? "fixed inset-0 z-50 bg-neutral-50 dark:bg-[#07070a] p-4 flex flex-col h-screen" : "lg:col-span-2"}>
+          <Panel className={`relative p-0 overflow-hidden bg-white dark:bg-[#07070a] border-neutral-200 dark:border-neutral-800 flex-1 flex flex-col ${isFullscreen ? "h-full" : ""}`}>
+            {is3D && (
+              <div className="absolute top-4 left-4 z-10 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreen(!isFullscreen)}
+                  className="bg-white/90 hover:bg-neutral-100 dark:bg-neutral-900/90 dark:hover:bg-neutral-800 backdrop-blur-md px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5 transition-all shadow-lg pointer-events-auto"
+                >
+                  {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-indigo-500" /> : <Maximize2 className="w-3.5 h-3.5 text-indigo-500" />}
+                  {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                </button>
+              </div>
+            )}
+            
+            {isFullscreen && (
+              <div className="absolute top-4 right-4 z-20 w-80 bg-white/95 dark:bg-neutral-950/95 backdrop-blur-md border border-neutral-200 dark:border-neutral-800 p-4 rounded-xl shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto pointer-events-auto">
+                <div className="flex justify-between items-center border-b border-neutral-200 dark:border-neutral-800 pb-2">
+                  <span className="text-[10px] font-mono text-neutral-500 dark:text-neutral-400">Floating controls</span>
+                  <button 
+                    onClick={() => setIsFullscreen(false)} 
+                    className="text-[10px] text-indigo-405 hover:underline"
+                  >
+                    Exit FS
+                  </button>
+                </div>
+                {renderControls()}
+              </div>
+            )}
+
             {is3D ? (
               <svg
                 viewBox={`0 0 ${VIEW3D_W} ${VIEW3D_H}`}
-                className="w-full h-auto select-none cursor-move"
+                className={`w-full h-auto select-none cursor-move ${isFullscreen ? "flex-1" : ""}`}
+                style={{ height: isFullscreen ? "100%" : "auto" }}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -576,129 +735,11 @@ export default function NormalDistributionTool() {
           <Interpretation text={is3D ? correlationInterpretation : overlayInterpretation} />
         </div>
 
-        <Panel className="space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-neutral-200 dark:border-neutral-800">
-            <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">3D Bivariate Surface</span>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked={is3D} onChange={(e) => setIs3D(e.target.checked)} />
-              <div className="w-11 h-6 bg-neutral-200 dark:bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-neutral-400 dark:after:bg-neutral-600 after:border-neutral-300 dark:after:border-neutral-800 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500 peer-checked:after:bg-white"></div>
-            </label>
-          </div>
-
-          {is3D ? (
-            <>
-              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200 dark:border-neutral-800/50 pb-1 mb-2">Variable X Parameters</div>
-              <Field label="μX (mean X)" value={mu.toFixed(2)}>
-                <input type="range" min={-3} max={3} step={0.1} value={mu} onChange={(e) => setMu(Number(e.target.value))} className="w-full" />
-              </Field>
-              <NumberInput label="μX exact" value={mu} onChange={setMu} step={0.1} />
-              
-              <Field label="σX (std X)" value={sigma.toFixed(2)}>
-                <input type="range" min={0.3} max={2.5} step={0.1} value={sigma} onChange={(e) => setSigma(Number(e.target.value))} className="w-full" />
-              </Field>
-              <NumberInput label="σX exact" value={sigma} onChange={setSigma} step={0.1} min={0.01} />
-
-              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200 dark:border-neutral-800/50 pb-1 mt-4 mb-2">Variable Y Parameters</div>
-              <Field label="μY (mean Y)" value={muY.toFixed(2)}>
-                <input type="range" min={-3} max={3} step={0.1} value={muY} onChange={(e) => setMuY(Number(e.target.value))} className="w-full" />
-              </Field>
-              <NumberInput label="μY exact" value={muY} onChange={setMuY} step={0.1} />
-
-              <Field label="σY (std Y)" value={sigmaY.toFixed(2)}>
-                <input type="range" min={0.3} max={2.5} step={0.1} value={sigmaY} onChange={(e) => setSigmaY(Number(e.target.value))} className="w-full" />
-              </Field>
-              <NumberInput label="σY exact" value={sigmaY} onChange={setSigmaY} step={0.1} min={0.01} />
-
-              <div className="text-xs font-semibold uppercase tracking-wider text-neutral-500 border-b border-neutral-200 dark:border-neutral-800/50 pb-1 mt-4 mb-2">Relationship</div>
-              <Field label="ρ (correlation)" value={rho.toFixed(2)}>
-                <input type="range" min={-0.95} max={0.95} step={0.05} value={rho} onChange={(e) => setRho(Number(e.target.value))} className="w-full" />
-              </Field>
-              <NumberInput label="ρ exact" value={rho} onChange={setRho} step={0.05} min={-0.99} max={0.99} />
-
-              <div className="pt-2 border-t border-neutral-200 dark:border-neutral-800 space-y-2">
-                <Stat label="Covariance σXY" value={covariance.toFixed(4)} />
-                <Stat label="Peak Density" value={maxDensity.toFixed(4)} />
-              </div>
-            </>
-          ) : (
-            <>
-              <Field label="μ (mean)" value={mu.toFixed(2)}>
-                <input type="range" min={-5} max={5} step={0.1} value={mu} onChange={(e) => setMu(Number(e.target.value))} className="w-full" />
-              </Field>
-              <NumberInput label="μ exact" value={mu} onChange={setMu} step={0.1} />
-              <Field label="σ (std)" value={sigma.toFixed(2)}>
-                <input type="range" min={0.2} max={5} step={0.1} value={sigma} onChange={(e) => setSigma(Number(e.target.value))} className="w-full" />
-              </Field>
-              <NumberInput label="σ exact" value={sigma} onChange={setSigma} step={0.1} min={0.01} />
-
-              {tab === "Curve" && (
-                <>
-                  <Stat label="Variance σ²" value={(sigma * sigma).toFixed(3)} />
-                  <Stat label="68% interval" value={`[${(mu - sigma).toFixed(2)}, ${(mu + sigma).toFixed(2)}]`} />
-                  <Stat label="95% interval" value={`[${(mu - 2 * sigma).toFixed(2)}, ${(mu + 2 * sigma).toFixed(2)}]`} />
-                  <Stat label="99.7% interval" value={`[${(mu - 3 * sigma).toFixed(2)}, ${(mu + 3 * sigma).toFixed(2)}]`} />
-                </>
-              )}
-
-              {tab === "Probability" && (
-                <>
-                  <Select label="Region" value={calcMode}
-                    onChange={(v) => setCalcMode(v as "lt" | "gt" | "between")}
-                    options={[
-                      { value: "lt", label: "P(X ≤ a)" },
-                      { value: "gt", label: "P(X ≥ a)" },
-                      { value: "between", label: "P(a ≤ X ≤ b)" },
-                    ]} />
-                  <NumberInput label="a" value={aVal} onChange={setAVal} step={0.1} />
-                  {calcMode === "between" && <NumberInput label="b" value={bVal} onChange={setBVal} step={0.1} />}
-                  <Stat label="Probability" value={probability.toFixed(4)} sub={`${(probability * 100).toFixed(2)}%`} />
-                  <Formula text={
-                    calcMode === "lt" ? `Φ((${aVal} − ${mu})/${sigma})` :
-                    calcMode === "gt" ? `1 − Φ((${aVal} − ${mu})/${sigma})` :
-                    `Φ((${bVal} − ${mu})/${sigma}) − Φ((${aVal} − ${mu})/${sigma})`
-                  } />
-                </>
-              )}
-
-              {tab === "Z-Score" && (
-                <>
-                  <NumberInput label="Raw value x" value={rawX} onChange={setRawX} step={0.1} />
-                  <Stat label="z-score" value={z.toFixed(4)} />
-                  <Stat label="Percentile" value={`${percentile.toFixed(2)}%`} />
-                  <Formula text={`z = (x − μ) / σ = (${rawX} − ${mu}) / ${sigma}`} />
-                  <div className="text-xs text-neutral-500 mt-2">
-                    Inverse: at the {percentile.toFixed(0)}th percentile, x ≈ {(mu + normalInv(percentile / 100) * sigma).toFixed(2)}
-                  </div>
-                </>
-              )}
-
-              {tab === "Data Overlay" && (
-                <>
-                  {dataset && (
-                    <ColumnPicker label="Workspace column (optional)" value={valueCol} onChange={setValueCol} kind="numeric" autoPick={false} />
-                  )}
-                  {!(valueCol && wsData) && (
-                    <>
-                      <DataTextArea label="Data" value={rawData} onChange={setRawData}
-                        placeholder="62, 65, 68, …" rows={5} />
-                      <SampleDataButton onClick={() => setRawData(SAMPLE)} />
-                    </>
-                  )}
-                  {dataPts && dataPts.length >= 2 && (
-                    <>
-                      <Stat label="Sample n" value={`${dataPts.length}`} />
-                      <Stat label="Sample mean" value={mean(dataPts).toFixed(3)} sub={`vs μ = ${mu}`} />
-                      <Stat label="Sample SD"   value={sd(dataPts).toFixed(3)}   sub={`vs σ = ${sigma}`} />
-                      <Btn onClick={() => { setMu(Number(mean(dataPts).toFixed(2))); setSigma(Number(sd(dataPts).toFixed(2))); }}>
-                        Fit μ, σ to data
-                      </Btn>
-                    </>
-                  )}
-                </>
-              )}
-            </>
-          )}
-        </Panel>
+        {!isFullscreen && (
+          <Panel className="space-y-5">
+            {renderControls()}
+          </Panel>
+        )}
       </div>
     </div>
   );

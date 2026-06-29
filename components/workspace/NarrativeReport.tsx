@@ -549,7 +549,7 @@ function InlineChartWidget({ chart, dataset }: { chart: ChartSuggestion; dataset
             const toolId = type === "scatter" ? "linear-regression" : type === "bar" ? "bar-chart" : type === "box" ? "box-plot" : "normal-distribution";
             window.location.href = `/app?tool=${toolId}`;
           }}
-          className="text-[10px] text-orange-500 hover:underline font-bold"
+          className="text-[10px] text-orange-500 hover:underline font-bold print:hidden"
         >
           Open Tool →
         </button>

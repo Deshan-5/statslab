@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Field, Panel, Btn , useRegisterToolState } from "@/components/tools/shared/ui";
+import NeuralNetworkArchitectureView from "@/components/tools/NeuralNetworkArchitectureView";
 import {
   Play,
   Pause,
@@ -208,6 +209,7 @@ export default function NeuralNetworkTool() {
   const [epoch, setEpoch] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dark, setDark] = useState(false);
+  const [view, setView] = useState<"manifold" | "architecture">("manifold");
 
   const [loss, setLoss] = useState(0.693); // ln(2), loss at random-chance init
   const [accuracy, setAccuracy] = useState(0.5);
@@ -954,6 +956,33 @@ export default function NeuralNetworkTool() {
   );
 
   return (
+    <div>
+      {!isFullscreen && (
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setView("manifold")}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg border transition-colors ${
+              view === "manifold"
+                ? "bg-purple-500/10 border-purple-500 text-purple-600 dark:text-purple-400"
+                : "bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            }`}
+          >
+            Manifold Fold
+          </button>
+          <button
+            onClick={() => setView("architecture")}
+            className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg border transition-colors ${
+              view === "architecture"
+                ? "bg-cyan-500/10 border-cyan-500 text-cyan-600 dark:text-cyan-400"
+                : "bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            }`}
+          >
+            Architecture
+          </button>
+        </div>
+      )}
+
+      <div className={view === "architecture" ? "hidden" : ""}>
     <div className={isFullscreen ? "" : "grid grid-cols-1 lg:grid-cols-3 gap-6"}>
       <div
         ref={containerRef}
@@ -1019,6 +1048,16 @@ export default function NeuralNetworkTool() {
           <Panel className="space-y-6 border-neutral-200 dark:border-neutral-800">{renderControls()}</Panel>
         </div>
       )}
+    </div>
+      </div>
+
+      <div className={view === "architecture" ? "" : "hidden"}>
+        <NeuralNetworkArchitectureView
+          dark={dark}
+          isFullscreen={isFullscreen && view === "architecture"}
+          onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+        />
+      </div>
     </div>
   );
 }

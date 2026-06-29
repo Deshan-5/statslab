@@ -102,14 +102,17 @@ export async function POST(req: NextRequest) {
 
   const genai = new GoogleGenerativeAI(apiKey);
   const model = genai.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || "gemini-flash-latest",
+    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
     systemInstruction: SYSTEM,
   });
 
-  const history = messages.slice(0, -1).map((m) => ({
-    role: m.role === "user" ? "user" : "model",
+  const rawHistory = messages.slice(0, -1).map((m) => ({
+    role: (m.role === "user" ? "user" : "model") as "user" | "model",
     parts: [{ text: m.content }],
   }));
+  // Gemini requires history to start with a user turn — drop any leading assistant messages
+  const firstUserIdx = rawHistory.findIndex((m) => m.role === "user");
+  const history = firstUserIdx >= 0 ? rawHistory.slice(firstUserIdx) : [];
 
   try {
     const chat = model.startChat({

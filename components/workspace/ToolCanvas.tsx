@@ -73,12 +73,14 @@ async function listWorkspacesFromDbOrLocal(userId: string | undefined) {
 }
 
 async function deleteWorkspaceFromDbOrLocal(id: string, userId?: string) {
-  try {
-    const { deleteAnalysis } = await import("@/lib/db");
-    const success = await deleteAnalysis(id, userId);
-    if (success) return true;
-  } catch (err) {
-    // Ignore and proceed to local
+  if (userId) {
+    try {
+      const { deleteAnalysis } = await import("@/lib/db");
+      const success = await deleteAnalysis(id, userId);
+      if (success) return true;
+    } catch (err) {
+      // Ignore and proceed to local
+    }
   }
 
   const localKey = "statslab:saved-workspaces";
@@ -382,7 +384,7 @@ export default function ToolCanvas({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[11px] font-semibold bg-neutral-50 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white border border-neutral-200 dark:border-neutral-700 px-2.5 py-0.5 rounded-full transition-colors"
               >
-                📖 Learn
+                Learn
               </a>
             )}
           </div>
