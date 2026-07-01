@@ -6,43 +6,60 @@ import { rateLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
-const SYSTEM_INSTRUCTION = `You are a Senior Research Statistician and Data Analyst.
-Your task is to generate a comprehensive, publication-quality Statistical Narrative Report based on a structured summary of a dataset, including computed client-side statistical test results.
+const SYSTEM_INSTRUCTION = `You are the lead statistician writing the analysis a busy decision-maker will read in under three minutes. The dataset has ALREADY been analysed: the system computed exact descriptive statistics, ran the tests, applied Benjamini–Hochberg FDR correction (q-values), sized every effect, built confidence intervals, chose nonparametric tests where assumptions failed, scored data quality, and — when a target is given — ran a key-driver regression. It then RANKED what matters. Your job is interpretation and clear writing. You never calculate, never decide significance, never re-rank.
 
-RULES:
-- Do NOT make up, hallucinate, or change any of the mathematical/statistical values. Use the EXACT numbers, means, p-values, t-stats, and R-values provided in the prompt.
-- The report must be highly professional, clinical, objective, and clear. Do not use AI-cliché greetings or emojis.
-- Tone guidelines:
-  * "academic": Use formal scientific writing style suitable for an academic journal, with detailed interpretations.
-  * "executive": Focus heavily on business impact, placing the key takeaways and actionable executive summary at the absolute front.
-  * "tutor": Use educational, step-by-step explanations, making sure to define terms like p-value, correlation, and ANOVA in the context of the user's data.
-- Focus guidelines:
-  * "general": Give a broad exploratory overview covering distributions, group comparisons, and correlations.
-  * "correlation": Deep dive into relationships between numerical variables, discussing correlation strengths and linear regressions.
-  * "difference": Deep dive into group differences (t-tests, ANOVA) and compare categorical groupings.
-  * "distribution": Focus on variable shapes, skewness, outliers, normality, and fitting characteristics.
+NON-NEGOTIABLE RULES
+1. Never invent, re-round, or alter a number. Quote the provided means, SDs, r, R², effect sizes, confidence intervals, test statistics, p-values and q-values exactly as given.
+2. The DETECTED SIGNALS list is the definitive, complete set of real effects — each already cleared FDR correction (its q-value, not raw p, beat alpha) AND an effect-size threshold. Build findings only from it. Never promote a pattern absent from the list into a finding, and never claim a tested-but-unlisted pair proves "no effect" — it showed "no detectable effect". When a signal reports a q-value, cite q, not just p, so the reader knows it survived multiple-comparison correction.
+3. Write for signal, not length. No preamble, no "in conclusion", no restating the prompt, no filler transitions ("it is worth noting", "interestingly", "as we can see"), no emojis, no hedging chains. If a sentence carries no number and no decision, delete it.
+4. Separate statistical from practical significance. A tiny p-value on a negligible effect size is not an important finding — say so plainly. Prefer the confidence interval over the bare p-value when stating a magnitude ("groups differ by 12–18 units"), and translate effect sizes into plain language.
+5. Be honest about limits only where they actually bite: correlation is not causation; DRIVERS are predictive associations, never proven causes, and collinear predictors split credit; a nonparametric test was used when a variable was skewed — say so; small groups (n<30) reduce confidence.
 
-CHART EMBEDDING RULES:
-You can choose to suggest inline charts to embed inside specific sections of the report. The frontend will render interactive SVG charts for you. To suggest a chart, include a 'chart' object inside the section with:
-- 'type': Must be one of "scatter" (bivariate regression), "bar" (means by category), "box" (distribution by category), "distribution" (histogram/bell curve of a single column).
-- 'xCol': The name of the column for the X-axis (must match one of the column names in the dataset exactly).
-- 'yCol': The name of the column for the Y-axis (must match one of the column names in the dataset exactly, except for "distribution" type where yCol is not needed).
-Only suggest charts that can be supported by the data columns listed in the prompt context.
+STYLE
+- Plain, exact, confident. Short declarative sentences. Concrete nouns over adjectives.
+- Bold the single most decision-relevant number in a sentence with **markdown bold** so it can be scanned. At most one bolded figure per sentence.
+- Translate magnitudes for a non-statistician: "a strong positive relationship (r=0.71 explains 50% of the variance)", "the groups differ by about a third of a standard deviation (a small effect)".
+- Do not pad section counts. Fewer, denser sections beat many thin ones.
 
-Return ONLY a valid JSON object matching the following TypeScript schema:
+TONE
+- "academic": precise, neutral, methods-aware; name the tests. No first person.
+- "executive": lead with the decision and the number that drives it; business consequence before mechanism; skip method names unless they change the conclusion.
+- "tutor": define each term the first time it matters, in one clause, in the reader's own data ("the p-value — the chance of seeing this pattern if there were truly no relationship").
+
+FOCUS
+- "general": brief tour of the strongest distributions, differences, and relationships — depth only where a finding earns it.
+- "correlation": relationships between numeric variables; strength, direction, R², and what does NOT correlate.
+- "difference": group differences; which groups differ, by how much (effect size), and which do not.
+- "distribution": shape, skew, outliers, and normality of key variables, and what that implies for downstream tests.
+
+TARGET MODE
+- If a TARGET is given, the report's central question is "what drives <target>?". Lead the findings and one section with the key-driver signal: rank the drivers by standardized β, name the strongest, and state the joint model R² ("these drivers explain 47% of <target>"). Always frame drivers as predictive associations, never causes.
+
+DATA OVERVIEW
+- Write "dataOverview": one or two sentences on scale and trustworthiness from the QUALITY block — completeness, duplicate rows, constant/identifier columns. If quality is clean, say so in a single clause and move on. Do not pad.
+
+CHARTS
+Optionally embed one chart per section (max 3 total) by adding a "chart" object. Only embed a chart that a specific claim in that section refers to.
+- "type": "scatter" (bivariate regression), "bar" (means by category), "box" (distribution by category), or "distribution" (histogram + fitted curve for one column).
+- "xCol"/"yCol": must match dataset column names EXACTLY. For "distribution", omit yCol.
+
+Output ONLY valid JSON matching this schema:
 {
-  "title": string,
-  "executiveSummary": string,
+  "title": string,                         // specific to the data, not "Statistical Report"
+  "executiveSummary": string,              // 2–4 sentences; the answer first, no windup
+  "dataOverview": string,                  // 1–2 sentences on scale + quality (see DATA OVERVIEW)
+  "keyFindings": Array<{
+    "finding": string,                     // one scannable sentence, <= 22 words, states direction + magnitude
+    "detail": string,                      // the supporting statistics only, <= 14 words (e.g. "r=0.71, p<0.001, n=240")
+    "significance": "significant" | "not-significant" | "descriptive"
+  }>,                                       // 3–5 items, ordered by importance
   "sections": Array<{
     "title": string,
-    "paragraphs": string[],
-    "chart"?: {
-      "type": "scatter" | "bar" | "box" | "distribution",
-      "xCol": string,
-      "yCol": string
-    }
-  }>,
-  "recommendations": string[]
+    "paragraphs": string[],                // 1–2 paragraphs, each <= 70 words
+    "chart"?: { "type": "scatter" | "bar" | "box" | "distribution", "xCol": string, "yCol": string }
+  }>,                                       // 2–4 sections
+  "recommendations": Array<string>,        // 2–4 concrete next actions, each tied to a finding above
+  "limitations": Array<string>             // 1–3 honest caveats, each <= 22 words; return [] if none are real
 }
 `;
 
@@ -93,45 +110,70 @@ export async function POST(req: NextRequest) {
     datasetName,
     rowCount,
     colCount,
-    columns,
+    numericColumns,
     categoricalColumns,
-    correlations,
-    groupComparisons,
+    signals,
+    coverage,
+    quality,
+    target,
     focus = "general",
     tone = "academic",
     alpha = 0.05,
   } = body;
 
-  if (!columns || !Array.isArray(columns)) {
-    return NextResponse.json({ error: "Missing or invalid 'columns' parameter" }, { status: 400 });
+  if (!Array.isArray(signals) || !Array.isArray(numericColumns)) {
+    return NextResponse.json(
+      { error: "Missing or invalid analysis payload ('signals' / 'numericColumns')." },
+      { status: 400 }
+    );
   }
 
-  // Construct context prompt for Gemini
-  const prompt = `Please write a Statistical Narrative Report for the dataset: "${datasetName || "Dataset"}".
+  // Helper for compact numeric formatting in the roster.
+  const fmt = (n: number) => (Number.isFinite(n) ? Number(n.toPrecision(4)).toString() : "n/a");
+  const cov = coverage || {};
 
-DATASET METADATA:
-- Total rows: ${rowCount}
-- Total columns: ${colCount}
-- Significance level (alpha): ${alpha}
-- Report Focus: ${focus}
-- Report Tone: ${tone}
+  // The system has already computed, verified, and RANKED everything. The prompt
+  // hands the model a distilled ledger of notable patterns — not raw matrices —
+  // so its only job is interpretation and clear writing.
+  const signalBlock = signals.length
+    ? signals
+        .map((s: any, i: number) =>
+          `${i + 1}. [${s.kind}] ${s.cols.join(" ~ ")} — ${s.note}. (${s.detail})`
+        )
+        .join("\n")
+    : "NONE — no relationship, difference, or shape pattern cleared the significance and effect-size thresholds.";
 
-NUMERICAL COLUMNS:
-${columns.map((c: any) => `- "${c.name}": mean=${c.mean.toFixed(4)}, median=${c.median.toFixed(4)}, SD=${c.sd.toFixed(4)}, Skewness=${c.skewness.toFixed(4)}, Kurtosis=${c.kurtosis.toFixed(4)}, Outlier Count=${c.outlierCount}, Distribution=${c.distributionName || "unknown"}`).join("\n")}
+  const q = quality || {};
+  const qualityBits: string[] = [`completeness ${q.completeness ?? "?"}%`];
+  if (q.duplicateRows) qualityBits.push(`${q.duplicateRows} duplicate rows`);
+  if (Array.isArray(q.worstMissing) && q.worstMissing.length) qualityBits.push(`most-missing: ${q.worstMissing.map((m: any) => `${m.name} ${m.pct}%`).join(", ")}`);
+  if (Array.isArray(q.constantCols) && q.constantCols.length) qualityBits.push(`constant columns: ${q.constantCols.join(", ")}`);
+  if (Array.isArray(q.idLikeCols) && q.idLikeCols.length) qualityBits.push(`identifier-like: ${q.idLikeCols.join(", ")}`);
+
+  const prompt = `Write the statistical analysis for the dataset "${datasetName || "Dataset"}".
+Report focus: ${focus}. Tone: ${tone}. Significance threshold alpha = ${alpha}.${target ? `\nTARGET: "${target}" — the report's central question is what drives ${target}.` : ""}
+Shape: ${rowCount} rows x ${colCount} columns (${numericColumns.length} numeric, ${(categoricalColumns || []).length} categorical).
+
+The system has already run every test, FDR-corrected the p-values (q-values), sized every effect, built confidence intervals, chose nonparametric tests where needed, and RANKED what matters. Interpret the DETECTED SIGNALS below — do not recompute, re-rank, or invent anything beyond them.
+
+QUALITY: ${qualityBits.join("; ")}.
+
+NUMERIC COLUMNS (context and valid chart targets):
+${numericColumns.map((c: any) => `- "${c.name}": mean=${fmt(c.mean)}, SD=${fmt(c.sd)}, ${c.shape}`).join("\n")}
 
 CATEGORICAL COLUMNS:
-${(categoricalColumns || []).map((c: any) => `- "${c.name}": Unique Categories=${c.cardinality}`).join("\n")}
+${(categoricalColumns || []).length ? categoricalColumns.map((c: any) => `- "${c.name}": ${c.cardinality} categories`).join("\n") : "- none"}
 
-${correlations && correlations.length > 0 ? `PRE-COMPUTED PEARSON CORRELATIONS:
-${correlations.map((cr: any) => `- "${cr.col1}" vs "${cr.col2}": r=${cr.r.toFixed(4)}, p-value=${cr.pValue.toExponential(4)}`).join("\n")}` : ""}
+DETECTED SIGNALS (ranked by importance; each already survived FDR correction and an effect-size threshold; numbers are exact):
+${signalBlock}
 
-${groupComparisons && groupComparisons.length > 0 ? `PRE-COMPUTED GROUP COMPARISON TESTS (ANOVA/t-tests):
-${groupComparisons.map((gc: any) => `- Numeric "${gc.numericCol}" grouped by "${gc.categoricalCol}": Test=${gc.testName}, statistic=${gc.statistic.toFixed(4)}, p-value=${gc.pValue.toExponential(4)}, df=${JSON.stringify(gc.df)}`).join("\n")}` : ""}
+COVERAGE: ${cov.correlationsTested ?? 0} correlations and ${cov.groupTestsTested ?? 0} group comparisons were tested; after Benjamini–Hochberg correction only the signals above cleared the bar. Everything else showed no detectable effect — you may report that absence as a legitimate negative finding.
 
-INSTRUCTIONS:
-1. Deliver a highly detailed statistical analysis formatted to the JSON schema.
-2. Interleave relevant SVG chart suggestions (up to 3 total charts) using the chart objects in sections. Ensure the column names specified in charts match the names in NUMERICAL/CATEGORICAL COLUMNS exactly.
-3. Keep the report informative, detailed, and directly tied to the facts. Cite the statistics (e.g. means, p-values, ANOVA stats) directly.`;
+TASK: Produce the JSON report.
+- Write "dataOverview" from the QUALITY line (scale + trustworthiness), then build every keyFinding and section from the signals above, quoting their exact numbers (cite q-values and confidence intervals, not just p).
+${target ? `- Lead with the key-driver signal: rank drivers by standardized β, name the strongest, state the model R², and frame them as predictive associations, not causes.\n` : ""}- If there are no signals, that IS the headline: say plainly that no strong relationships or group differences emerged, and describe the data as stable / weakly structured — do not manufacture findings.
+- Distinguish statistical from practical significance using the effect sizes given.
+- Only embed a chart where a specific claim points to it (xCol/yCol must match the numeric/categorical column names above exactly).`;
 
   const genai = new GoogleGenerativeAI(apiKey);
   const model = genai.getGenerativeModel({

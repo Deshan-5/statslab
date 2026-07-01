@@ -289,6 +289,9 @@ export function lnGamma(z: number): number {
 export function incompleteBeta(x: number, a: number, b: number): number {
   if (x <= 0) return 0;
   if (x >= 1) return 1;
+  if (x > (a + 1) / (a + b + 2)) {
+    return 1 - incompleteBeta(1 - x, b, a);
+  }
   const lnBeta = lnGamma(a) + lnGamma(b) - lnGamma(a + b);
   const front = Math.exp(a * Math.log(x) + b * Math.log(1 - x) - lnBeta) / a;
   // continued fraction (Lentz)
@@ -558,7 +561,7 @@ export function oneWayANOVA(groups: number[][], alpha: number): TestResult & { g
 
   // F-distribution CDF via regularized incomplete beta
   const pValue = dfBetween > 0 && dfWithin > 0
-    ? 1 - incompleteBeta(dfWithin / (dfWithin + dfBetween * F), dfWithin / 2, dfBetween / 2)
+    ? incompleteBeta(dfWithin / (dfWithin + dfBetween * F), dfWithin / 2, dfBetween / 2)
     : 1;
 
   return {
@@ -657,13 +660,7 @@ export function pearsonR(xs: number[], ys: number[]) {
 }
 
 export function spearmanRho(xs: number[], ys: number[]) {
-  const rank = (arr: number[]) => {
-    const sorted = arr.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v);
-    const ranks = new Array(arr.length);
-    for (let i = 0; i < sorted.length; i++) ranks[sorted[i].i] = i + 1;
-    return ranks;
-  };
-  return pearsonR(rank(xs), rank(ys));
+  return pearsonR(averageRanks(xs), averageRanks(ys));
 }
 
 // ─── ACF ────────────────────────────────────────────────────────────────────
@@ -1126,6 +1123,187 @@ export function pacf(series: number[], lags: number): number[] {
     }
     phi = nextPhi;
   }
-  
+
   return out;
+}
+
+// ─── Rigor helpers: FDR, correlation CI, nonparametric tests, drivers ────────
+
+/**
+ * Benjamini–Hochberg FDR correction. Returns q-values (adjusted p-values) in
+ * the SAME order as the input. Apply within ONE family of related hypotheses
+ * (e.g. all pairwise correlations) so "significant" no longer means "one of
+ * dozens of tests happened to cross 0.05".
+ */
+export function benjaminiHochberg(pvals: number[]): number[] {
+  const m = pvals.length;
+  if (m === 0) return [];
+  const order = pvals.map((p, i) => ({ p, i })).sort((a, b) => a.p - b.p);
+  const q = new Array<number>(m);
+  let prev = 1; // running min of (m/rank)·p from the largest rank down
+  for (let k = m - 1; k >= 0; k--) {
+    const rank = k + 1;
+    const adj = Math.min(prev, (order[k].p * m) / rank);
+    const clamped = Math.max(0, Math.min(1, adj));
+    q[order[k].i] = clamped;
+    prev = clamped;
+  }
+  return q;
+}
+
+/** Two-sided confidence interval for Pearson r via the Fisher z-transform. */
+export function pearsonCI(r: number, n: number, confidence = 0.95): { lower: number; upper: number } {
+  if (n < 4 || Math.abs(r) >= 1) return { lower: r, upper: r };
+  const z = 0.5 * Math.log((1 + r) / (1 - r));
+  const se = 1 / Math.sqrt(n - 3);
+  const zc = zCrit(1 - confidence); // zCrit(0.05) ≈ 1.96 (two-sided), matching zCI
+  const back = (v: number) => (Math.exp(2 * v) - 1) / (Math.exp(2 * v) + 1);
+  return { lower: back(z - zc * se), upper: back(z + zc * se) };
+}
+
+/** Average (tie-corrected) ranks, 1-based. Shared by the rank-based tests. */
+function averageRanks(arr: number[]): number[] {
+  const idx = arr.map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v);
+  const ranks = new Array<number>(arr.length);
+  let i = 0;
+  while (i < idx.length) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1].v === idx[i].v) j++;
+    const avg = (i + j) / 2 + 1; // mean of the 1-based ranks i..j
+    for (let k = i; k <= j; k++) ranks[idx[k].i] = avg;
+    i = j + 1;
+  }
+  return ranks;
+}
+
+/**
+ * Mann–Whitney U test (two independent groups), normal approximation with a
+ * tie correction and continuity correction. Distribution-free alternative to
+ * Welch's t-test when a variable is skewed or heavy-tailed.
+ */
+export function mannWhitneyU(a: number[], b: number[]): { U: number; z: number; pValue: number } {
+  const n1 = a.length, n2 = b.length;
+  if (n1 === 0 || n2 === 0) return { U: 0, z: 0, pValue: 1 };
+  const all = a.concat(b);
+  const ranks = averageRanks(all);
+  let R1 = 0;
+  for (let i = 0; i < n1; i++) R1 += ranks[i];
+  const U1 = R1 - (n1 * (n1 + 1)) / 2;
+  const U = Math.min(U1, n1 * n2 - U1);
+  const N = n1 + n2;
+  const mu = (n1 * n2) / 2;
+  const counts = new Map<number, number>();
+  for (const v of all) counts.set(v, (counts.get(v) || 0) + 1);
+  let tieSum = 0;
+  for (const t of counts.values()) tieSum += t ** 3 - t;
+  const sigma = Math.sqrt((n1 * n2 / 12) * ((N + 1) - tieSum / (N * (N - 1))));
+  if (sigma === 0) return { U, z: 0, pValue: 1 };
+  const z = (Math.abs(U - mu) - 0.5) / sigma; // continuity correction
+  const pValue = 2 * (1 - normalCDF(z));
+  return { U, z, pValue: Math.max(0, Math.min(1, pValue)) };
+}
+
+/**
+ * Kruskal–Wallis H test (k independent groups), chi-square approximation with a
+ * tie correction. Distribution-free alternative to one-way ANOVA.
+ */
+export function kruskalWallis(groups: number[][]): { H: number; df: number; pValue: number } {
+  const k = groups.length;
+  const all = groups.flat();
+  const N = all.length;
+  if (k < 2 || N === 0) return { H: 0, df: Math.max(0, k - 1), pValue: 1 };
+  const ranks = averageRanks(all);
+  let offset = 0;
+  let rankSqSum = 0;
+  for (const g of groups) {
+    let Rg = 0;
+    for (let i = 0; i < g.length; i++) Rg += ranks[offset + i];
+    offset += g.length;
+    if (g.length > 0) rankSqSum += (Rg * Rg) / g.length;
+  }
+  let H = (12 / (N * (N + 1))) * rankSqSum - 3 * (N + 1);
+  const counts = new Map<number, number>();
+  for (const v of all) counts.set(v, (counts.get(v) || 0) + 1);
+  let tieSum = 0;
+  for (const t of counts.values()) tieSum += t ** 3 - t;
+  const C = 1 - tieSum / (N ** 3 - N);
+  if (C > 0) H = H / C;
+  const df = k - 1;
+  const pValue = df > 0 ? 1 - chi2CDF(H, df) : 1;
+  return { H, df, pValue: Math.max(0, Math.min(1, pValue)) };
+}
+
+export interface DriverResult {
+  r2: number;      // full-model R² (variance in target jointly explained)
+  adjR2: number;   // adjusted for predictor count
+  n: number;       // complete-case rows used
+  drivers: Array<{
+    name: string;
+    beta: number;    // standardized coefficient (comparable across predictors)
+    t: number;
+    pValue: number;
+    r: number;       // simple Pearson r with target, for sign/interpretation
+  }>;
+}
+
+/**
+ * Key-driver analysis: standardized-coefficient OLS of `Y` on `X` (rows aligned
+ * to Y). Standardizing puts every predictor on the same scale, so |beta| ranks
+ * how strongly each moves the target. Returns per-coefficient t/p (from
+ * (XᵀX)⁻¹σ²) and the joint R². Association, not causation — collinear predictors
+ * split credit, so pair with redundancy flags.
+ */
+export function driverAnalysis(Y: number[], X: number[][], names: string[]): DriverResult | null {
+  const N = Y.length;
+  const P = names.length;
+  if (P === 0 || X.length !== N || N < P + 2) return null;
+
+  const my = mean(Y), sy = sd(Y);
+  if (sy === 0) return null;
+  const Yz = Y.map((v) => (v - my) / sy);
+
+  // Standardize predictors; drop zero-variance columns.
+  const mx: number[] = [], sx: number[] = [];
+  const keep: number[] = [];
+  for (let j = 0; j < P; j++) {
+    const col = X.map((r) => r[j]);
+    mx[j] = mean(col);
+    sx[j] = sd(col);
+    if (sx[j] > 0) keep.push(j);
+  }
+  if (keep.length === 0 || N < keep.length + 2) return null;
+
+  const Xd = X.map((r) => [1, ...keep.map((j) => (r[j] - mx[j]) / sx[j])]); // intercept + z-preds
+  const Xt = transpose(Xd);
+  const inv = invertMatrix(multiply(Xt, Xd));
+  if (!inv) return null;
+  const XtY = multiply(Xt, Yz.map((v) => [v]));
+  const beta = multiply(inv, XtY).map((row) => row[0]); // [intercept, b1, …, bk]
+
+  let rss = 0, tss = 0;
+  for (let i = 0; i < N; i++) {
+    let pred = 0;
+    for (let c = 0; c < Xd[i].length; c++) pred += Xd[i][c] * beta[c];
+    rss += (Yz[i] - pred) ** 2;
+    tss += Yz[i] ** 2; // Yz has mean ~0
+  }
+  const kParams = beta.length;
+  const dfRes = N - kParams;
+  const r2 = tss === 0 ? 0 : 1 - rss / tss;
+  const adjR2 = dfRes > 0 ? 1 - (1 - r2) * (N - 1) / dfRes : r2;
+  const sigma2 = dfRes > 0 ? rss / dfRes : 0;
+
+  const drivers = keep
+    .map((jOrig, idx) => {
+      const c = idx + 1; // coefficient index (skip intercept)
+      const seC = Math.sqrt(Math.max(0, sigma2 * inv[c][c]));
+      const b = beta[c];
+      const t = seC > 0 ? b / seC : 0;
+      const pValue = dfRes > 0 ? 2 * (1 - tCDF(Math.abs(t), dfRes)) : 1;
+      const r = pearsonR(X.map((row) => row[jOrig]), Y);
+      return { name: names[jOrig], beta: b, t, pValue: Math.max(0, Math.min(1, pValue)), r };
+    })
+    .sort((a, b) => Math.abs(b.beta) - Math.abs(a.beta));
+
+  return { r2, adjR2, n: N, drivers };
 }
